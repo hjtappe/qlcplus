@@ -109,7 +109,7 @@ jobs:
           dir: ${{ env.QT_INSTALL_DIR }}
           modules: ${{ env.QT_MODULES_INSTALL }}
 
-      - name: Install python-lxml for fixtures-tool # with the now-registered aqt python
+      - name: Install python-lxml for fixtures-tool # with the now-registered aqt-python
         run: pip install lxml
 
       - name: Setup ccache
