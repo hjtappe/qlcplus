@@ -46,6 +46,9 @@ coverage/
 *.gcda
 *.gcno
 
+# static code analysis
+*.tidy
+
 # Development IDEs
 .vscode/
 

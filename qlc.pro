@@ -66,9 +66,9 @@ QMAKE_DISTCLEAN += $$translations.files
 run.target = run
 QMAKE_EXTRA_TARGETS += run
 qmlui: {
-unix:run.commands += LD_LIBRARY_PATH=engine/src:\$\$LD_LIBRARY_PATH qmlui/qlcplus-qml
+  unix:run.commands += LD_LIBRARY_PATH=engine/src:\$\$LD_LIBRARY_PATH qmlui/qlcplus-qml
 } else {
-unix:run.commands += LD_LIBRARY_PATH=engine/src:ui/src:webaccess/src:\$\$LD_LIBRARY_PATH main/qlcplus
+  unix:run.commands += LD_LIBRARY_PATH=engine/src:ui/src:webaccess/src:\$\$LD_LIBRARY_PATH main/qlcplus
 }
 
 # run-fxe
@@ -76,7 +76,7 @@ run-fxe.target = run-fxe
 QMAKE_EXTRA_TARGETS += run-fxe
 qmlui: {
 } else {
-unix:run-fxe.commands += LD_LIBRARY_PATH=engine/src:ui/src:webaccess/src:\$\$LD_LIBRARY_PATH ./fixtureeditor/qlcplus-fixtureeditor
+  unix:run-fxe.commands += LD_LIBRARY_PATH=engine/src:ui/src:webaccess/src:\$\$LD_LIBRARY_PATH ./fixtureeditor/qlcplus-fixtureeditor
 }
 
 # doxygen
@@ -86,3 +86,4 @@ unix:doxygen.commands += cd resources/doxygen && rm -rf html/ && doxygen qlcplus
 
 # Leave this on the last row of this file
 SUBDIRS += platforms
+
