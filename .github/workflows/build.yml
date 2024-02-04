@@ -102,8 +102,13 @@ jobs:
           echo "TASK: ${TASK}"
           echo "QT: ${QT}"
           echo "NPROC: ${NPROC}"
-          echo "apt-sources:"
-          cat /etc/apt/sources.list
+
+      - name: Register llvm apt repository
+        uses: myci-actions/add-deb-repo@11
+        with:
+          repo: deb http://apt.llvm.org/focal/ llvm-toolchain-focal-14 main
+          repo-name: apt.llvm.org
+          keys-asc: https://apt.llvm.org/llvm-snapshot.gpg.key
 
       - name: Download, cache and install packages
         uses: awalsh128/cache-apt-pkgs-action@latest
