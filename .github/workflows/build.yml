@@ -19,6 +19,9 @@ jobs:
       CXX: g++
       PACKAGES_BASE:
         gdb
+        clang-14
+        clang-tidy-14
+        clazy
         libasound2-dev
         libusb-1.0-0-dev
         libftdi1-dev
