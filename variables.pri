@@ -281,3 +281,10 @@ clang-tidy.input = SOURCES
 clang-tidy.output = ${QMAKE_FILE_BASE}.tidy
 clang-tidy.CONFIG = no_link target_predeps
 QMAKE_EXTRA_COMPILERS += clang-tidy
+
+# clang clazy
+clang-clazy.commands = echo ${QMAKE_FILE_NAME} | grep -q -v ".cpp$$" || CLANGXX=clang++-14 clazy ${QMAKE_FILE_NAME} -std=c++11 -stdlib=libc++ ${CXXFLAGS} ${INCPATH} && touch ${QMAKE_FILE_BASE}.clazy
+clang-clazy.input = SOURCES
+clang-clazy.output = ${QMAKE_FILE_BASE}.clazy
+clang-clazy.CONFIG = no_link target_predeps
+#QMAKE_EXTRA_COMPILERS += clang-clazy

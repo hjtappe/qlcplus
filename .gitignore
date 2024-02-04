@@ -48,6 +48,7 @@ coverage/
 
 # static code analysis
 *.tidy
+*.clazy
 
 # Development IDEs
 .vscode/
