@@ -276,7 +276,7 @@ unix:!macx: {
 }
 
 # clang-tidy
-clang-tidy.commands = echo ${QMAKE_FILE_NAME} | grep -q -v ".cpp$$" || clang-tidy-14 -v --quiet -p=. --checks="-*,clang-*,-header-filter=.*,analyzer-*,optin.*,clang-analyzer-*,clang-analyzer-cplusplus*" ${QMAKE_FILE_NAME} -- -std=c++11 -stdlib=libstdc++ ${CXXFLAGS} ${INCPATH} | tee ${QMAKE_FILE_BASE}.tidy
+clang-tidy.commands = echo ${QMAKE_FILE_NAME} | grep -q -v ".cpp$$" || clang-tidy-14 --quiet -p=. --checks="-*,clang-*,-header-filter=.*,analyzer-*,optin.*,clang-analyzer-*,clang-analyzer-cplusplus*" ${QMAKE_FILE_NAME} -- -std=c++11 -stdlib=libstdc++ ${CXXFLAGS} ${INCPATH} | tee ${QMAKE_FILE_BASE}.tidy
 clang-tidy.input = SOURCES
 clang-tidy.output = ${QMAKE_FILE_BASE}.tidy
 clang-tidy.CONFIG = no_link target_predeps
