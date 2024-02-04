@@ -102,6 +102,8 @@ jobs:
           echo "TASK: ${TASK}"
           echo "QT: ${QT}"
           echo "NPROC: ${NPROC}"
+          echo "apt-sources:"
+          cat /etc/apt/sources.list
 
       - name: Download, cache and install packages
         uses: awalsh128/cache-apt-pkgs-action@latest
