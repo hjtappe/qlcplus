@@ -23,6 +23,7 @@ jobs:
         clang-tidy-14
         clazy
         libasound2-dev
+        libc++-dev
         libusb-1.0-0-dev
         libftdi1-dev
         shared-mime-info
