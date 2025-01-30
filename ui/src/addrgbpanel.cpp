@@ -19,12 +19,12 @@
 
 #include <QPushButton>
 #include <QDebug>
+#include <QSettings>
 
 #include "addrgbpanel.h"
-#include "ui_addrgbpanel.h"
-#include "qlcfixturemode.h"
-#include "qlcfixturedef.h"
 #include "doc.h"
+
+#define SETTINGS_GEOMETRY "addrgbpanel/geometry"
 
 AddRGBPanel::AddRGBPanel(QWidget *parent, const Doc *doc)
     : QDialog(parent)
@@ -45,8 +45,15 @@ AddRGBPanel::AddRGBPanel(QWidget *parent, const Doc *doc)
 
     checkAddressAvailability();
 
+    QSettings settings;
+    QVariant geometrySettings = settings.value(SETTINGS_GEOMETRY);
+    if (geometrySettings.isValid() == true)
+        restoreGeometry(geometrySettings.toByteArray());
+
     connect(m_uniCombo, SIGNAL(currentIndexChanged(int)),
             this, SLOT(slotUniverseChanged()));
+    connect(m_compCombo, SIGNAL(currentIndexChanged(int)),
+            this, SLOT(slotComponentsChanged(int)));
     connect(m_addressSpin, SIGNAL(valueChanged(int)),
             this, SLOT(slotAddressChanged()));
     connect(m_columnSpin, SIGNAL(valueChanged(int)),
@@ -57,6 +64,8 @@ AddRGBPanel::AddRGBPanel(QWidget *parent, const Doc *doc)
 
 AddRGBPanel::~AddRGBPanel()
 {
+    QSettings settings;
+    settings.setValue(SETTINGS_GEOMETRY, saveGeometry());
 }
 bool AddRGBPanel::checkAddressAvailability()
 {
@@ -85,6 +94,14 @@ bool AddRGBPanel::checkAddressAvailability()
 void AddRGBPanel::slotUniverseChanged()
 {
     checkAddressAvailability();
+}
+
+void AddRGBPanel::slotComponentsChanged(int index)
+{
+    if (index == 6) // RGBW
+        m_columnSpin->setMaximum(128);
+    else
+        m_columnSpin->setMaximum(170);
 }
 
 void AddRGBPanel::slotAddressChanged()
@@ -177,6 +194,16 @@ Fixture::Components AddRGBPanel::components()
         return Fixture::RGBW;
 
     return Fixture::RGB;
+}
+
+bool AddRGBPanel::is16Bit()
+{
+    return m_16bitCheck->isChecked();
+}
+
+bool AddRGBPanel::crossUniverse()
+{
+    return m_crossUniverseCheck->isChecked();
 }
 
 void AddRGBPanel::slotSizeChanged(int)

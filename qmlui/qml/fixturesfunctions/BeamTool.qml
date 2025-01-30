@@ -20,6 +20,7 @@
 import QtQuick 2.0
 import QtQuick.Layouts 1.0
 
+import org.qlcplus.classes 1.0
 import "."
 
 Rectangle
@@ -35,23 +36,67 @@ Rectangle
     property real maxDegrees: 0
     property bool invertedZoom: false
     property real projectedDiameter: 0
+    property bool isUpdating: false
+
+    property alias currentDegrees: beamSpinBox.realValue
+    property int previousDegrees: 0
+    property bool relativeValue: false
 
     signal close()
 
     onMinDegreesChanged: gCanvas.requestPaint()
     onMaxDegreesChanged: gCanvas.requestPaint()
 
+    onVisibleChanged:
+    {
+        if (visible)
+        {
+            previousDegrees = 0
+            var val = contextManager.getCurrentValue(QLCChannel.Beam, true)
+            isUpdating = true
+
+            if (val === -1)
+            {
+                relativeValue = true
+                currentDegrees = 0
+            }
+            else
+            {
+                relativeValue = false
+                currentDegrees = val
+            }
+            beamSpinBox.value = currentDegrees * Math.pow(10, beamSpinBox.decimals)
+            calculateProjection()
+            isUpdating = false
+        }
+    }
+
+    onCurrentDegreesChanged:
+    {
+        if (isUpdating)
+            return
+
+        var val = relativeValue ? currentDegrees - previousDegrees : currentDegrees
+        previousDegrees = currentDegrees
+
+        beamSpinBox.value = currentDegrees * Math.pow(10, beamSpinBox.decimals)
+        contextManager.setBeamDegrees(val, relativeValue)
+        calculateProjection()
+        gCanvas.requestPaint()
+    }
+
     function setZoomRange(min, max, inverted)
     {
         if (max === maxDegrees && min === minDegrees)
             return
 
+        isUpdating = true
         maxDegrees = max
         minDegrees = min
         invertedZoom = inverted
-        beamSpinBox.realValue = inverted ? maxDegrees : minDegrees
-        beamSpinBox.value = beamSpinBox.realValue * Math.pow(10, beamSpinBox.decimals)
-        gCanvas.requestPaint()
+        currentDegrees = inverted ? maxDegrees : minDegrees
+        beamSpinBox.value = currentDegrees * Math.pow(10, beamSpinBox.decimals)
+        isUpdating = false
     }
 
     function calculateProjection()
@@ -172,16 +217,8 @@ Rectangle
         CustomDoubleSpinBox
         {
             id: beamSpinBox
-            realFrom: minDegrees
+            realFrom: relativeValue ? -maxDegrees : minDegrees
             realTo: maxDegrees
-            //realValue: invertedZoom ? maxDegrees : minDegrees
-
-            onRealValueChanged:
-            {
-                contextManager.setBeamDegrees(realValue)
-                calculateProjection()
-                gCanvas.requestPaint()
-            }
         }
 
         RobotoText { label: qsTr("Distance") }
@@ -205,7 +242,7 @@ Rectangle
 
         RobotoText
         {
-            label: Number(toolRoot.projectedDiameter).toFixed(2) + "m"
+            label: relativeValue ? qsTr("N/A") : Number(toolRoot.projectedDiameter).toFixed(2) + "m"
             fontBold: true
             //labelColor: UISettings.highlight
         }

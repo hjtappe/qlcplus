@@ -127,7 +127,7 @@ void SimpleDesk::updateChannelList()
     {
         quint32 chIndex = 0;
         quint32 chValue = currUni.at(i);
-        bool override = false;
+        bool isOverriding = false;
 
         Fixture *fixture = m_doc->fixture(m_doc->fixtureForAddress(start + i));
         if (fixture != nullptr)
@@ -141,7 +141,7 @@ void SimpleDesk::updateChannelList()
             if (hasChannel(i))
             {
                 chValue = value(i);
-                override = true;
+                isOverriding = true;
             }
             else
             {
@@ -152,7 +152,7 @@ void SimpleDesk::updateChannelList()
         {
             if (hasChannel(i))
             {
-                override = true;
+                isOverriding = true;
                 chValue = value(i);
             }
         }
@@ -162,7 +162,7 @@ void SimpleDesk::updateChannelList()
         chMap.insert("chIndex", chIndex);
         chMap.insert("chValue", chValue);
         chMap.insert("chDisplay", status);
-        chMap.insert("isOverride", override);
+        chMap.insert("isOverride", isOverriding);
 
         m_channelList->addDataMap(chMap);
     }
@@ -413,7 +413,7 @@ void SimpleDesk::dumpDmxChannels(QString name, quint32 mask)
 {
     QList<quint32> fixtureList;
 
-    for (SceneValue scv : m_dumpValues)
+    for (SceneValue &scv : m_dumpValues)
         if (!fixtureList.contains(scv.fxi))
             fixtureList.append(scv.fxi);
 
@@ -424,12 +424,15 @@ void SimpleDesk::dumpDmxChannels(QString name, quint32 mask)
  * Keypad
  ************************************************************************/
 
-void SimpleDesk::sendKeypadCommand(QString command)
+bool SimpleDesk::sendKeypadCommand(QString command)
 {
+    if (command.isEmpty())
+        return false;
+
     QByteArray uniData = m_prevUniverseValues.value(m_universeFilter);
     QList<SceneValue> scvList = m_keyPadParser->parseCommand(m_doc, command, uniData);
 
-    for (SceneValue scv : scvList)
+    for (SceneValue &scv : scvList)
     {
         quint32 fxID = m_doc->fixtureForAddress((m_universeFilter * 512) + scv.channel);
         Fixture *fixture = m_doc->fixture(fxID);
@@ -446,6 +449,8 @@ void SimpleDesk::sendKeypadCommand(QString command)
         m_keypadCommandHistory.removeLast();
 
     emit commandHistoryChanged();
+
+    return true;
 }
 
 QStringList SimpleDesk::commandHistory() const

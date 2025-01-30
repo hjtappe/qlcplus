@@ -32,10 +32,8 @@
 
 #include "inputoutputmap.h"
 #include "genericfader.h"
-#include "fadechannel.h"
 #include "mastertimer.h"
 #include "dmxsource.h"
-#include "qlcmacros.h"
 #include "function.h"
 #include "universe.h"
 #include "doc.h"
@@ -209,13 +207,8 @@ void MasterTimer::fadeAndStopAll(int timeout)
 
         QList<Universe *> universes = doc->inputOutputMap()->claimUniverses();
         foreach (Universe *universe, universes)
-        {
-            foreach (QSharedPointer<GenericFader> fader, universe->faders())
-            {
-                if (!fader.isNull() && fader->parentFunctionID() != Function::invalidId())
-                    fader->setFadeOut(true, uint(timeout));
-            }
-        }
+            universe->setFaderFadeOut(timeout);
+
         doc->inputOutputMap()->releaseUniverses();
     }
 
@@ -266,6 +259,8 @@ void MasterTimer::timerTickFunctions(QList<Universe *> universes)
                     removeList << i; // Don't remove the item from the list just yet.
                     functionListHasChanged = true;
                     stoppedAFunction = true;
+
+                    emit functionStopped(function->id());
                 }
             }
         }

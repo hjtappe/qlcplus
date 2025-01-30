@@ -316,6 +316,16 @@ int RGBGrabber::rgbMapStepCount(const QSize& size)
     return 1;
 }
 
+void RGBGrabber::rgbMapSetColors(QVector<uint> &colors)
+{
+    Q_UNUSED(colors);
+}
+
+QVector<uint> RGBGrabber::rgbMapGetColors()
+{
+    return QVector<uint>();
+}
+
 void RGBGrabber::rgbMap(const QSize& size, uint rgb, int step, RGBMap &map)
 {
     Q_UNUSED(rgb);

@@ -46,6 +46,7 @@ Rectangle
     {
         anchors.fill: parent
         orientation: Qt.Vertical
+        z: 1
 
         // Top view (faders)
         Rectangle
@@ -101,55 +102,6 @@ Rectangle
                     }
 
                     Rectangle { Layout.fillWidth: true; color: "transparent" }
-
-                    // Scene dump button
-                    IconButton
-                    {
-                        id: sceneDump
-                        z: 2
-                        imgSource: "qrc:/dmxdump.svg"
-                        tooltip: qsTr("Dump on a new Scene")
-                        counter: simpleDesk ? simpleDesk.dumpValuesCount && (qlcplus.accessMask & App.AC_FunctionEditing) : 0
-
-                        onClicked:
-                        {
-                            if (dmxDumpDialog.show)
-                            {
-                                dmxDumpDialog.open()
-                                dmxDumpDialog.focusEditItem()
-                            }
-                        }
-
-                        Rectangle
-                        {
-                            x: -3
-                            //y: -3
-                            width: sceneDump.width * 0.4
-                            height: width
-                            color: "red"
-                            border.width: 1
-                            border.color: UISettings.fgMain
-                            radius: 3
-                            clip: true
-
-                            RobotoText
-                            {
-                                anchors.centerIn: parent
-                                height: parent.height * 0.7
-                                label: simpleDesk ? simpleDesk.dumpValuesCount : ""
-                                fontSize: height
-                            }
-                        }
-
-                        PopupDMXDump
-                        {
-                            id: dmxDumpDialog
-                            implicitWidth: Math.min(UISettings.bigItemHeight * 4, mainView.width / 3)
-                            channelsMask: simpleDesk ? simpleDesk.dumpChannelMask : 0
-
-                            onAccepted: simpleDesk.dumpDmxChannels(sceneName, getChannelsMask())
-                        }
-                    }
 
                     // DMX/Percentage button
                     DMXPercentageButton
@@ -209,8 +161,8 @@ Rectangle
                                 switch(chDisplay)
                                 {
                                     case SimpleDesk.None: return "transparent"
-                                    case SimpleDesk.Odd: return "#414b41"
-                                    case SimpleDesk.Even: return "#42444b"
+                                    case SimpleDesk.Odd: return UISettings.bgFixtureOdd
+                                    case SimpleDesk.Even: return UISettings.bgFixtureEven
                                 }
                             }
                         }
@@ -254,7 +206,8 @@ Rectangle
                                 from: 0
                                 to: 255
                                 value: model.chValue
-                                onMoved: {
+                                onMoved:
+                                {
                                     model.isOverride = true
                                     model.chValue = valueAt(position)
                                     simpleDesk.setValue(fixtureObj ? fixtureObj.id : -1, fixtureObj ? model.chIndex : index, model.chValue)
@@ -274,7 +227,8 @@ Rectangle
                                 padding: 0
                                 horizontalAlignment: Qt.AlignHCenter
                                 value: dmxValues ? model.chValue : (model.chValue / 255.0) * 100.0
-                                onValueModified: {
+                                onValueModified:
+                                {
                                     model.isOverride = true
                                     model.chValue = value * (dmxValues ? 1.0 : 2.55)
                                     simpleDesk.setValue(fixtureObj ? fixtureObj.id : -1, fixtureObj ? model.chIndex : index, model.chValue)

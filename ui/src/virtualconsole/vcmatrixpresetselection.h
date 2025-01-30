@@ -42,8 +42,10 @@ public:
 protected slots:
     void slotUpdatePresetProperties();
 
-    void slotPropertyComboChanged(QString value);
+    void slotPropertyComboChanged(int index);
     void slotPropertySpinChanged(int value);
+    void slotPropertyDoubleSpinChanged(double value);
+    void slotPropertyEditChanged(QString text);
 
 private:
     void resetProperties(QLayoutItem *item);

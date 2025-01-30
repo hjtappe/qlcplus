@@ -80,12 +80,21 @@ private:
     /** Init engine, engine mutex, and scripts map */
     static void initEngine();
 
+    /** Handle an error after evaluate() or call() of a script */
+    static void displayError(QScriptValue e, const QString& fileName);
+
     /************************************************************************
      * RGBAlgorithm API
      ************************************************************************/
 public:
     /** @reimp */
     int rgbMapStepCount(const QSize& size);
+
+    /** @reimp */
+    void rgbMapSetColors(QVector<uint> &colors);
+
+    /** @reimp */
+    QVector<uint> rgbMapGetColors();
 
     /** @reimp */
     void rgbMap(const QSize& size, uint rgb, int step, RGBMap &map);
@@ -116,6 +125,8 @@ private:
     QScriptValue m_script;          //! The script itself
     QScriptValue m_rgbMap;          //! rgbMap() function
     QScriptValue m_rgbMapStepCount; //! rgbMapStepCount() function
+    QScriptValue m_rgbMapSetColors; //! rgbMapSetColors() function
+    QScriptValue m_rgbMapGetColors; //! rgbMapSetColors() function
 
     /************************************************************************
      * Properties

@@ -71,6 +71,9 @@ private:
     /** Init engine, engine mutex, and scripts map */
     static void initEngine();
 
+    /** Handle an error after evaluate() or call() of a script */
+    static void displayError(QJSValue e, const QString& fileName);
+
 private:
     static QJSEngine* s_engine;      //! The engine that runs all scripts
 #if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
@@ -87,6 +90,12 @@ private:
 public:
     /** @reimp */
     int rgbMapStepCount(const QSize& size);
+
+    /** @reimp */
+    void rgbMapSetColors(QVector<uint> &colors);
+
+    /** @reimp */
+    QVector<uint> rgbMapGetColors();
 
     /** @reimp */
     void rgbMap(const QSize& size, uint rgb, int step, RGBMap &map);
@@ -117,6 +126,8 @@ private:
     QJSValue m_script;          //! The script itself
     QJSValue m_rgbMap;          //! rgbMap() function
     QJSValue m_rgbMapStepCount; //! rgbMapStepCount() function
+    QJSValue m_rgbMapSetColors; //! rgbMapSetColors() function
+    QJSValue m_rgbMapGetColors; //! rgbMapSetColors() function
 
     /************************************************************************
      * Properties

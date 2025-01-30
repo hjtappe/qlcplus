@@ -25,9 +25,12 @@
 typedef struct
 {
     bool enabled;
-    QString name;
+    QString devName;
+    QString connName;
+    QString connUUID;
     bool isStatic;
     bool isWireless;
+    bool isHotspot;
     QString address;
     QString netmask;
     QString gateway;
@@ -49,17 +52,16 @@ public:
     QString getNetworkHTML();
     QString getHTML();
 
-    bool updateNetworkFile(QStringList cmdList);
+    bool updateNetworkSettings(QStringList cmdList);
+    bool createWiFiHotspot(QString SSID, QString password);
+    bool deleteWiFiHotspot();
 
 protected:
-    void parseWPAConfFile(InterfaceInfo *iface);
-    bool writeNetworkFile();
-    QString netmaskToString(int mask);
-    int stringToNetmask(QString mask);
+    QStringList getNmcliOutput(QStringList args, bool verbose = false);
+    void refreshConnectionsList();
 
 protected:
-    QList<InterfaceInfo>m_interfaces;
-    QStringList m_dhcpcdConfCache;
+    QList<InterfaceInfo> m_interfaces;
 };
 
 #endif // WEBACCESSNETWORK_H

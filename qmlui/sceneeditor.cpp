@@ -70,6 +70,7 @@ void SceneEditor::setFunctionID(quint32 id)
         m_source->setOutputEnabled(false);
         m_fixtureList->clear();
         m_fixtureIDs.clear();
+        m_selectedChannels.clear();
         if (bottomPanel != nullptr)
             bottomPanel->setProperty("visible", false);
         return;
@@ -108,7 +109,7 @@ void SceneEditor::setPreviewEnabled(bool enable)
 
     if (enable == true)
     {
-        foreach(SceneValue sv, m_scene->values())
+        foreach (SceneValue sv, m_scene->values())
             m_source->set(sv.fxi, sv.channel, sv.value);
     }
     else
@@ -263,6 +264,28 @@ void SceneEditor::setFixtureSelection(quint32 fxID)
                               Q_ARG(QVariant, fxIndex));
 }
 
+void SceneEditor::setChannelSelection(quint32 fxID, quint32 channel, bool selected)
+{
+    SceneValue scv(fxID, channel);
+
+    if (selected)
+    {
+        if (m_selectedChannels.contains(scv) == false)
+            m_selectedChannels.append(scv);
+    }
+    else
+    {
+        m_selectedChannels.removeAll(scv);
+    }
+
+    emit selectedChannelCountChanged();
+}
+
+int SceneEditor::selectedChannelCount()
+{
+    return m_selectedChannels.count();
+}
+
 void SceneEditor::addComponent(int type, quint32 id)
 {
     if (m_scene == nullptr)
@@ -271,23 +294,21 @@ void SceneEditor::addComponent(int type, quint32 id)
     switch(type)
     {
         case App::UniverseDragItem:
-        {
-            // TODO
-        }
         break;
         case App::FixtureGroupDragItem:
+            Tardis::instance()->enqueueAction(Tardis::SceneAddFixtureGroup, m_scene->id(), QVariant(), id);
             m_scene->addFixtureGroup(id);
             m_doc->setModified();
         break;
         case App::FixtureDragItem:
+            Tardis::instance()->enqueueAction(Tardis::SceneAddFixture, m_scene->id(), QVariant(), id);
             m_scene->addFixture(id);
             m_doc->setModified();
         break;
         case App::PaletteDragItem:
-        {
+            Tardis::instance()->enqueueAction(Tardis::SceneAddPalette, m_scene->id(), QVariant(), id);
             m_scene->addPalette(id);
             m_doc->setModified();
-        }
         break;
         default:
         break;
@@ -296,12 +317,39 @@ void SceneEditor::addComponent(int type, quint32 id)
     updateLists();
 }
 
+void SceneEditor::pasteToAllFixtureSameType()
+{
+    for (SceneValue scv : m_selectedChannels)
+    {
+        Fixture *sourceFixture = m_doc->fixture(scv.fxi);
+        if (sourceFixture == nullptr)
+            continue;
+
+        uchar currentValue = m_scene->value(scv.fxi, scv.channel);
+
+        for (quint32 dstFxId : m_scene->fixtures())
+        {
+            Fixture *destFixture = m_doc->fixture(scv.fxi);
+            if (dstFxId == scv.fxi || destFixture == nullptr)
+                continue;
+
+            if (sourceFixture->fixtureDef() == destFixture->fixtureDef() &&
+                sourceFixture->fixtureMode() == destFixture->fixtureMode())
+            {
+                SceneValue dstScv(dstFxId, scv.channel, currentValue);
+                m_scene->setValue(dstScv);
+                slotSceneValueChanged(dstScv);
+            }
+        }
+    }
+}
+
 void SceneEditor::deleteItems(QVariantList list)
 {
     if (m_scene == nullptr || list.isEmpty())
         return;
 
-    for (QVariant vIdx : list)
+    for (QVariant &vIdx : list)
     {
         int index = vIdx.toInt();
         QVariantMap dataMap = m_componentList->itemAt(index).toMap();
@@ -314,12 +362,18 @@ void SceneEditor::deleteItems(QVariantList list)
                 Fixture *fixture = dataMap["cRef"].value<Fixture *>();
                 quint32 fixtureID = fixture->id();
                 qDebug() << "removing fixture with ID" << fixtureID;
-                // TODO: tardis
+
                 for (SceneValue &scv : m_scene->values())
                 {
                     if (scv.fxi == fixtureID)
+                    {
+                        QVariant currentVal;
+                        currentVal.setValue(scv);
+                        Tardis::instance()->enqueueAction(Tardis::SceneUnsetChannelValue, m_scene->id(), currentVal, QVariant());
                         m_scene->unsetValue(fixtureID, scv.channel);
+                    }
                 }
+                Tardis::instance()->enqueueAction(Tardis::SceneRemoveFixture, m_scene->id(), fixtureID, QVariant());
                 m_scene->removeFixture(fixtureID);
             }
             break;
@@ -327,7 +381,7 @@ void SceneEditor::deleteItems(QVariantList list)
             {
                 FixtureGroup *group = dataMap["cRef"].value<FixtureGroup *>();
                 qDebug() << "removing fixture group with ID" << group->id();
-                // TODO: tardis
+                Tardis::instance()->enqueueAction(Tardis::SceneRemoveFixtureGroup, m_scene->id(), group->id(), QVariant());
                 m_scene->removeFixtureGroup(group->id());
             }
             break;
@@ -335,7 +389,7 @@ void SceneEditor::deleteItems(QVariantList list)
             {
                 QLCPalette *palette = dataMap["cRef"].value<QLCPalette *>();
                 qDebug() << "removing palette with ID" << palette->id();
-                // TODO: tardis
+                Tardis::instance()->enqueueAction(Tardis::SceneRemovePalette, m_scene->id(), palette->id(), QVariant());
                 m_scene->removePalette(palette->id());
             }
             break;
@@ -377,7 +431,7 @@ void SceneEditor::updateLists()
     if (m_scene == nullptr)
         return;
 
-    for (quint32 fxID : m_fixtureIDs)
+    for (quint32 &fxID : m_fixtureIDs)
     {
         Fixture *fixture = m_doc->fixture(fxID);
         if (fixture == nullptr)
@@ -401,7 +455,7 @@ void SceneEditor::updateLists()
      */
 
     // fixture groups
-    for (quint32 grpId : m_scene->fixtureGroups())
+    for (quint32 &grpId : m_scene->fixtureGroups())
     {
         FixtureGroup *grp = m_doc->fixtureGroup(grpId);
         if (grp == nullptr)
@@ -413,7 +467,7 @@ void SceneEditor::updateLists()
         grpMap.insert("isSelected", false);
         m_componentList->addDataMap(grpMap);
 
-        for (quint32 fxId : grp->fixtureList())
+        for (quint32 &fxId : grp->fixtureList())
         {
             if (m_fixtureIDs.contains(fxId) == false)
             {
@@ -432,7 +486,7 @@ void SceneEditor::updateLists()
     }
 
     // palettes
-    for (quint32 pId : m_scene->palettes())
+    for (quint32 &pId : m_scene->palettes())
     {
         QLCPalette *palette = m_doc->palette(pId);
         if (palette == nullptr)
@@ -446,11 +500,11 @@ void SceneEditor::updateLists()
     }
 
     // fixtures (there might be fixtures with no values set)
-    for (quint32 fId : m_scene->fixtures())
+    for (quint32 &fId : m_scene->fixtures())
         addFixtureToList(fId);
 
     // scene values
-    for (SceneValue sv : m_scene->values())
+    for (SceneValue &sv : m_scene->values())
         addFixtureToList(sv.fxi);
 
     emit componentListChanged();
@@ -481,20 +535,20 @@ void SceneEditor::cacheChannelValues()
 {
     m_channelsCache.clear();
 
-    for (quint32 pId : m_scene->palettes())
+    for (quint32 &pId : m_scene->palettes())
     {
         QLCPalette *palette = m_doc->palette(pId);
         if (palette == nullptr)
             continue;
 
-        for (SceneValue scv : palette->valuesFromFixtureGroups(m_doc, m_scene->fixtureGroups()))
+        for (SceneValue &scv : palette->valuesFromFixtureGroups(m_doc, m_scene->fixtureGroups()))
             setCacheChannelValue(scv);
 
-        for (SceneValue scv : palette->valuesFromFixtures(m_doc, m_scene->fixtures()))
+        for (SceneValue &scv : palette->valuesFromFixtures(m_doc, m_scene->fixtures()))
             setCacheChannelValue(scv);
     }
 
-    for (SceneValue scv : m_scene->values())
+    for (SceneValue &scv : m_scene->values())
         setCacheChannelValue(scv);
 }
 

@@ -256,7 +256,7 @@ public:
      * @return true if the fixture was successfully added to doc,
      *         otherwise false.
      */
-    bool addFixture(Fixture* fixture, quint32 id = Fixture::invalidId());
+    bool addFixture(Fixture* fixture, quint32 id = Fixture::invalidId(), bool crossUniverse = false);
 
     /**
      * Delete the given fixture instance from Doc
@@ -295,6 +295,13 @@ public:
      * Get a list of fixtures ordered by ID
      */
     QList<Fixture*> const& fixtures() const;
+
+    /**
+     * Get the number of fixtures currently added to the project
+     *
+     * @return The number of fixtures
+     */
+    int fixturesCount() const;
 
     /**
      * Get the fixture that occupies the given DMX address. If multiple fixtures

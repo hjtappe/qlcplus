@@ -90,6 +90,8 @@ MainView3D::MainView3D(QQuickView *view, Doc *doc, QObject *parent)
     QStringList listRoles;
     listRoles << "itemID" << "name" << "isSelected";
     m_genericItemsList->setRoleNames(listRoles);
+
+    resetCameraPosition();
 }
 
 MainView3D::~MainView3D()
@@ -160,17 +162,16 @@ void MainView3D::resetItems()
     QMetaObject::invokeMethod(m_scene3D, "updateFrameGraph", Q_ARG(QVariant, false));
 
     QMapIterator<quint32, SceneItem*> it(m_entitiesMap);
-    while(it.hasNext())
+    while (it.hasNext())
     {
         it.next();
         SceneItem *e = it.value();
-        //if (e->m_headItem)
-        //    delete e->m_headItem;
-        //if (e->m_armItem)
-        //    delete e->m_armItem;
         delete e->m_goboTexture;
-        // delete e->m_rootItem; // TODO: with this -> segfault
         delete e->m_selectionBox;
+        // delete e->m_rootItem; // TODO: with this -> segfault
+        if (e->m_rootItem)
+            e->m_rootItem->setProperty("enabled", false); // workaround for the above
+        delete e;
     }
 
     //const auto end = m_entitiesMap.end();
@@ -179,7 +180,7 @@ void MainView3D::resetItems()
     m_entitiesMap.clear();
 
     QMapIterator<int, SceneItem*> it2(m_genericMap);
-    while(it2.hasNext())
+    while (it2.hasNext())
     {
         it2.next();
         SceneItem *e = it2.value();
@@ -194,6 +195,52 @@ void MainView3D::resetItems()
     m_maxFrameCount = 0;
     m_avgFrameCount = 1.0;
     setFrameCountEnabled(false);
+}
+
+void MainView3D::resetCameraPosition()
+{
+    setCameraPosition(QVector3D(0.0, 3.0, 7.5));
+    setCameraUpVector(QVector3D(0.0, 1.0, 0.0));
+    setCameraViewCenter(QVector3D(0.0, 1.0, 0.0));
+}
+
+QVector3D MainView3D::cameraPosition() const
+{
+    return m_cameraPosition;
+}
+
+void MainView3D::setCameraPosition(const QVector3D &newCameraPosition)
+{
+    if (m_cameraPosition == newCameraPosition)
+        return;
+    m_cameraPosition = newCameraPosition;
+    emit cameraPositionChanged();
+}
+
+QVector3D MainView3D::cameraUpVector() const
+{
+    return m_cameraUpVector;
+}
+
+void MainView3D::setCameraUpVector(const QVector3D &newCameraUpVector)
+{
+    if (m_cameraUpVector == newCameraUpVector)
+        return;
+    m_cameraUpVector = newCameraUpVector;
+    emit cameraUpVectorChanged();
+}
+
+QVector3D MainView3D::cameraViewCenter() const
+{
+    return m_cameraViewCenter;
+}
+
+void MainView3D::setCameraViewCenter(const QVector3D &newCameraViewCenter)
+{
+    if (m_cameraViewCenter == newCameraViewCenter)
+        return;
+    m_cameraViewCenter = newCameraViewCenter;
+    emit cameraViewCenterChanged();
 }
 
 QString MainView3D::meshDirectory() const
@@ -214,7 +261,7 @@ void MainView3D::setUniverseFilter(quint32 universeFilter)
     PreviewContext::setUniverseFilter(universeFilter);
 
     QMapIterator<quint32, SceneItem*> it(m_entitiesMap);
-    while(it.hasNext())
+    while (it.hasNext())
     {
         it.next();
         quint32 itemID = it.key();
@@ -475,6 +522,7 @@ void MainView3D::createFixtureItem(quint32 fxID, quint16 headIndex, quint16 link
     if (fixture == nullptr)
         return;
 
+    QLCFixtureMode *fxMode = fixture->fixtureMode();
     QString meshPath = meshDirectory() + "fixtures" + QDir::separator();
     QString openGobo = goboDirectory() + QDir::separator() + "Others/open.svg";
     quint32 itemID = FixtureUtils::fixtureItemID(fxID, headIndex, linkedIndex);
@@ -503,6 +551,13 @@ void MainView3D::createFixtureItem(quint32 fxID, quint16 headIndex, quint16 link
             return;
         }
         newItem->setProperty("headsNumber", fixture->heads());
+
+        if (fxMode != nullptr)
+        {
+            QLCPhysical phy = fxMode->physical();
+            if (phy.layoutSize() != QSize(1, 1))
+                newItem->setProperty("headsLayout", phy.layoutSize());
+        }
     }
     else if (fixture->type() == QLCFixtureDef::LEDBarPixels)
     {
@@ -519,6 +574,13 @@ void MainView3D::createFixtureItem(quint32 fxID, quint16 headIndex, quint16 link
             return;
         }
         newItem->setProperty("headsNumber", fixture->heads());
+
+        if (fxMode != nullptr)
+        {
+            QLCPhysical phy = fxMode->physical();
+            if (phy.layoutSize() != QSize(1, 1))
+                newItem->setProperty("headsLayout", phy.layoutSize());
+        }
     }
     else
     {
@@ -1114,7 +1176,8 @@ void MainView3D::updateFixtureItem(Fixture *fixture, quint16 headIndex, quint16 
     }
 
     quint32 masterDimmerChannel = fixture->masterIntensityChannel();
-    qreal masterDimmerValue = qreal(fixture->channelValueAt(int(masterDimmerChannel))) / 255.0;
+    qreal masterDimmerValue = masterDimmerChannel != QLCChannel::invalid() ?
+                              qreal(fixture->channelValueAt(int(masterDimmerChannel))) / 255.0 : 1.0;
 
     for (int headIdx = 0; headIdx < fixture->heads(); headIdx++)
     {
@@ -1123,8 +1186,13 @@ void MainView3D::updateFixtureItem(Fixture *fixture, quint16 headIndex, quint16 
             headDimmerChannel = masterDimmerChannel;
 
         qreal intensityValue = 1.0;
+        bool hasDimmer = false;
+
         if (headDimmerChannel != QLCChannel::invalid())
+        {
             intensityValue = qreal(fixture->channelValueAt(int(headDimmerChannel))) / 255.0;
+            hasDimmer = true;
+        }
 
         if (headDimmerChannel != masterDimmerChannel)
             intensityValue *= masterDimmerValue;
@@ -1135,7 +1203,7 @@ void MainView3D::updateFixtureItem(Fixture *fixture, quint16 headIndex, quint16 
                 Q_ARG(QVariant, headIdx),
                 Q_ARG(QVariant, intensityValue));
 
-        color = FixtureUtils::headColor(fixture, headIdx);
+        color = FixtureUtils::headColor(fixture, hasDimmer, headIdx);
 
         QMetaObject::invokeMethod(fixtureItem, "setHeadRGBColor",
                                   Q_ARG(QVariant, headIdx),
@@ -1303,7 +1371,7 @@ void MainView3D::updateFixtureItem(Fixture *fixture, quint16 headIndex, quint16 
 void MainView3D::updateFixtureSelection(QList<quint32> fixtures)
 {
     QMapIterator<quint32, SceneItem*> it(m_entitiesMap);
-    while(it.hasNext())
+    while (it.hasNext())
     {
         it.next();
         quint32 fxID = it.key();
@@ -1454,8 +1522,11 @@ void MainView3D::removeFixtureItem(quint32 itemID)
 
     SceneItem *mesh = m_entitiesMap.take(itemID);
 
-    delete mesh->m_rootItem;
+    delete mesh->m_goboTexture;
     delete mesh->m_selectionBox;
+    delete mesh->m_rootTransform;
+//    delete mesh->m_rootItem; // this will cause a segfault
+    mesh->m_rootItem->setProperty("enabled", false); // workaround for the above
 
     delete mesh;
 }
@@ -1627,7 +1698,7 @@ void MainView3D::setItemSelection(int itemID, bool enable, int keyModifiers)
 
     if (enable && keyModifiers == 0)
     {
-        for (int id : m_genericSelectedItems)
+        for (int &id : m_genericSelectedItems)
         {
             SceneItem *meshRef = m_genericMap.value(id, nullptr);
             if (meshRef)
@@ -1662,7 +1733,7 @@ int MainView3D::genericSelectedCount() const
 
 void MainView3D::removeSelectedGenericItems()
 {
-    for (int id : m_genericSelectedItems)
+    for (int &id : m_genericSelectedItems)
     {
         SceneItem *meshRef = m_genericMap.take(id);
         if (meshRef)
@@ -1679,7 +1750,7 @@ void MainView3D::removeSelectedGenericItems()
 
 void MainView3D::normalizeSelectedGenericItems()
 {
-    for (int id : m_genericSelectedItems)
+    for (int &id : m_genericSelectedItems)
     {
         SceneItem *meshRef = m_genericMap.value(id, nullptr);
         if (meshRef)
@@ -1711,7 +1782,7 @@ void MainView3D::updateGenericItemsList()
 {
     m_genericItemsList->clear();
 
-    for (quint32 itemID : m_monProps->genericItemsID())
+    for (quint32 &itemID : m_monProps->genericItemsID())
     {
         QVariantMap itemMap;
         itemMap.insert("itemID", itemID);
@@ -1732,6 +1803,9 @@ void MainView3D::updateGenericItemPosition(quint32 itemID, QVector3D pos)
 {
     if (isEnabled() == false)
         return;
+
+    QVector3D currPos = m_monProps->itemPosition(itemID);
+    Tardis::instance()->enqueueAction(Tardis::GenericItemSetPosition, itemID, QVariant(currPos), QVariant(pos));
 
     m_monProps->setItemPosition(itemID, pos);
 
@@ -1765,7 +1839,7 @@ void MainView3D::setGenericItemsPosition(QVector3D pos)
     else
     {
         // relative position change
-        for (int itemID : m_genericSelectedItems)
+        for (int &itemID : m_genericSelectedItems)
         {
             QVector3D newPos = m_monProps->itemPosition(itemID) + pos;
             updateGenericItemPosition(itemID, newPos);
@@ -1779,6 +1853,9 @@ void MainView3D::updateGenericItemRotation(quint32 itemID, QVector3D rot)
 {
     if (isEnabled() == false)
         return;
+
+    QVector3D currRot = m_monProps->itemRotation(itemID);
+    Tardis::instance()->enqueueAction(Tardis::GenericItemSetRotation, itemID, QVariant(currRot), QVariant(rot));
 
     m_monProps->setItemRotation(itemID, rot);
     SceneItem *item = m_genericMap.value(itemID, nullptr);
@@ -1812,7 +1889,7 @@ void MainView3D::setGenericItemsRotation(QVector3D rot)
     else
     {
         // relative position change
-        for (int itemID : m_genericSelectedItems)
+        for (int &itemID : m_genericSelectedItems)
         {
             QVector3D newRot = m_monProps->itemRotation(itemID) + rot;
 
@@ -1836,6 +1913,9 @@ void MainView3D::updateGenericItemScale(quint32 itemID, QVector3D scale)
 {
     if (isEnabled() == false)
         return;
+
+    QVector3D currScale = m_monProps->itemScale(itemID);
+    Tardis::instance()->enqueueAction(Tardis::GenericItemSetScale, itemID, QVariant(currScale), QVariant(scale));
 
     m_monProps->setItemScale(itemID, scale);
     SceneItem *item = m_genericMap.value(itemID, nullptr);
@@ -1870,7 +1950,7 @@ void MainView3D::setGenericItemsScale(QVector3D scale)
     }
     else
     {
-        for (int itemID : m_genericSelectedItems)
+        for (int &itemID : m_genericSelectedItems)
         {
             QVector3D newScale = m_monProps->itemScale(itemID) + normScale;
             updateGenericItemScale(itemID, newScale);

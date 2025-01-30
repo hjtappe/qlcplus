@@ -56,14 +56,24 @@ public:
 
     enum ControlType
     {
-        StartColor = 0,
-        EndColor,
+        Color1 = 0,
+        Color2,
+        Color3,
+        Color4,
+        Color5,
+        Color1Knob,
+        Color2Knob,
+        Color3Knob,
+        Color4Knob,
+        Color5Knob,
+        Color1Reset,
+        Color2Reset,
+        Color3Reset,
+        Color4Reset,
+        Color5Reset,
         Animation,
         Image,
-        Text,
-        ResetEndColor,
-        StartColorKnob,
-        EndColorKnob
+        Text
     };
 
     enum WidgetType
@@ -83,7 +93,7 @@ public:
      *  get the rgb value for this value of the knob
      */
     QRgb valueToRgb(quint8 value) const;
-protected:
+
     static QString typeToString(ControlType type);
     static ControlType stringToType(QString str);
 

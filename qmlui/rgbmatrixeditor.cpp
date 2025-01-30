@@ -126,7 +126,7 @@ void RGBMatrixEditor::setAlgorithmIndex(int algoIndex)
 {
     qDebug() << "Set algorithm:" << algoIndex;
     QStringList algoList = algorithms();
-    if(algoIndex < 0 || algoIndex >= algorithms().count())
+    if (algoIndex < 0 || algoIndex >= algorithms().count())
         return;
 
     RGBAlgorithm *algo = RGBAlgorithm::algorithm(m_doc, algoList.at(algoIndex));
@@ -135,7 +135,16 @@ void RGBMatrixEditor::setAlgorithmIndex(int algoIndex)
         /** if we're setting the same algorithm, then there's nothing to do */
         if (m_matrix->algorithm() != nullptr && m_matrix->algorithm()->name() == algo->name())
             return;
-        algo->setColors(m_matrix->startColor(), m_matrix->endColor());
+
+        Q_ASSERT(5 == RGBAlgorithmColorDisplayCount);
+        QVector<QColor> colors = {
+                m_matrix->getColor(0),
+                m_matrix->getColor(1),
+                m_matrix->getColor(2),
+                m_matrix->getColor(3),
+                m_matrix->getColor(4)
+        };
+        algo->setColors(colors);
     }
 
     Tardis::instance()->enqueueAction(Tardis::RGBMatrixSetAlgorithmIndex, m_matrix->id(), algorithmIndex(), algoIndex);
@@ -155,64 +164,41 @@ int RGBMatrixEditor::algoColors()
     return m_matrix->algorithm()->acceptColors();
 }
 
-QColor RGBMatrixEditor::startColor() const
+QColor RGBMatrixEditor::colorAtIndex(int index)
 {
-    if (m_matrix == nullptr)
-        return Qt::red;
-
-    return m_matrix->startColor();
-}
-
-void RGBMatrixEditor::setStartColor(QColor algoStartColor)
-{
-    if (m_matrix == nullptr || m_matrix->startColor() == algoStartColor)
-        return;
-
-    Tardis::instance()->enqueueAction(Tardis::RGBMatrixSetStartColor, m_matrix->id(), m_matrix->startColor(), algoStartColor);
-    m_matrix->setStartColor(algoStartColor);
-    m_previewStepHandler->calculateColorDelta(m_matrix->startColor(), m_matrix->endColor());
-
-    emit startColorChanged(algoStartColor);
-}
-
-QColor RGBMatrixEditor::endColor() const
-{
-    if (m_matrix == nullptr)
+    if (m_matrix == nullptr || m_matrix->algorithm() == nullptr)
         return QColor();
 
-    return m_matrix->endColor();
+    return m_matrix->getColor(index);
 }
 
-void RGBMatrixEditor::setEndColor(QColor algoEndColor)
+void RGBMatrixEditor::setColorAtIndex(int index, QColor color)
 {
-    if (m_matrix == nullptr || m_matrix->endColor() == algoEndColor)
+    if (m_matrix == nullptr || m_matrix->getColor(index) == color)
         return;
 
-    Tardis::instance()->enqueueAction(Tardis::RGBMatrixSetEndColor, m_matrix->id(), m_matrix->endColor(), algoEndColor);
-    m_matrix->setEndColor(algoEndColor);
-    m_previewStepHandler->calculateColorDelta(m_matrix->startColor(), m_matrix->endColor());
-
-    emit endColorChanged(algoEndColor);
-    if (algoEndColor.isValid())
-        emit hasEndColorChanged(true);
+    Tardis::instance()->enqueueAction(Tardis::RGBMatrixSetColor1, m_matrix->id(), m_matrix->getColor(index), color);
+    m_matrix->setColor(index, color);
+    if (index < 2)
+        m_previewStepHandler->calculateColorDelta(m_matrix->getColor(0), m_matrix->getColor(1), m_matrix->algorithm());
 }
 
-bool RGBMatrixEditor::hasEndColor() const
+void RGBMatrixEditor::resetColorAtIndex(int index)
 {
-    if (m_matrix == nullptr || m_matrix->endColor().isValid() == false)
+    if (m_matrix == nullptr || m_matrix->getColor(index).isValid() == false)
+        return;
+
+    m_matrix->setColor(index, QColor());
+    if (index < 2)
+        m_previewStepHandler->calculateColorDelta(m_matrix->getColor(0), m_matrix->getColor(1), m_matrix->algorithm());
+}
+
+bool RGBMatrixEditor::hasColorAtIndex(int index)
+{
+    if (m_matrix == nullptr || m_matrix->getColor(index).isValid() == false)
         return false;
 
     return true;
-}
-
-void RGBMatrixEditor::setHasEndColor(bool hasEndCol)
-{
-    if (m_matrix && hasEndCol == false)
-    {
-        m_matrix->setEndColor(QColor());
-        m_previewStepHandler->calculateColorDelta(m_matrix->startColor(), m_matrix->endColor());
-    }
-    emit hasEndColorChanged(hasEndCol);
 }
 
 QString RGBMatrixEditor::algoText() const
@@ -427,11 +413,12 @@ void RGBMatrixEditor::createScriptObjects(QQuickItem *parent)
     RGBScript *script = static_cast<RGBScript*> (m_matrix->algorithm());
     QList<RGBScriptProperty> properties = script->properties();
 
-    foreach(RGBScriptProperty prop, properties)
+    foreach (RGBScriptProperty prop, properties)
     {
         // always create a label first
         QMetaObject::invokeMethod(parent, "addLabel",
                 Q_ARG(QVariant, prop.m_displayName));
+        QString pValue = m_matrix->property(prop.m_name);
 
         switch(prop.m_type)
         {
@@ -440,9 +427,8 @@ void RGBMatrixEditor::createScriptObjects(QQuickItem *parent)
                 QVariantList valList;
                 int idx = 0;
                 int currIdx = 0;
-                QString pValue = m_matrix->property(prop.m_name);
 
-                foreach(QString val, prop.m_listValues)
+                foreach (QString val, prop.m_listValues)
                 {
                     if (val == pValue)
                         currIdx = idx;
@@ -462,13 +448,25 @@ void RGBMatrixEditor::createScriptObjects(QQuickItem *parent)
             break;
             case RGBScriptProperty::Range:
             {
-                QString pValue = m_matrix->property(prop.m_name);
-
                 QMetaObject::invokeMethod(parent, "addSpinBox",
                         Q_ARG(QVariant, prop.m_name),
                         Q_ARG(QVariant, prop.m_rangeMinValue),
                         Q_ARG(QVariant, prop.m_rangeMaxValue),
                         Q_ARG(QVariant, pValue.toInt()));
+            }
+            break;
+            case RGBScriptProperty::Float:
+            {
+                QMetaObject::invokeMethod(parent, "addDoubleSpinBox",
+                                          Q_ARG(QVariant, prop.m_name),
+                                          Q_ARG(QVariant, pValue.toDouble()));
+            }
+            break;
+            case RGBScriptProperty::String:
+            {
+                QMetaObject::invokeMethod(parent, "addTextEdit",
+                                          Q_ARG(QVariant, prop.m_name),
+                                          Q_ARG(QVariant, pValue));
             }
             break;
             default:
@@ -489,7 +487,9 @@ void RGBMatrixEditor::setScriptStringProperty(QString paramName, QString value)
     StringStringPair oldValue(paramName, m_matrix->property(paramName));
     Tardis::instance()->enqueueAction(Tardis::RGBMatrixSetScriptStringValue, m_matrix->id(), QVariant::fromValue(oldValue),
                                       QVariant::fromValue(StringStringPair(paramName, value)));
+
     m_matrix->setProperty(paramName, value);
+    emit algoColorsChanged();
 }
 
 void RGBMatrixEditor::setScriptIntProperty(QString paramName, int value)
@@ -503,6 +503,20 @@ void RGBMatrixEditor::setScriptIntProperty(QString paramName, int value)
     StringIntPair oldValue(paramName, m_matrix->property(paramName).toInt());
     Tardis::instance()->enqueueAction(Tardis::RGBMatrixSetScriptIntValue, m_matrix->id(), QVariant::fromValue(oldValue),
                                       QVariant::fromValue(StringIntPair(paramName, value)));
+    m_matrix->setProperty(paramName, QString::number(value));
+}
+
+void RGBMatrixEditor::setScriptFloatProperty(QString paramName, double value)
+{
+    if (m_matrix == nullptr || m_matrix->algorithm() == nullptr ||
+        m_matrix->algorithm()->type() != RGBAlgorithm::Script)
+        return;
+
+    qDebug() << "[setScriptIntProperty] param:" << paramName << ", value:" << value;
+
+    StringDoublePair oldValue(paramName, m_matrix->property(paramName).toDouble());
+    Tardis::instance()->enqueueAction(Tardis::RGBMatrixSetScriptDoubleValue, m_matrix->id(), QVariant::fromValue(oldValue),
+                                      QVariant::fromValue(StringDoublePair(paramName, value)));
     m_matrix->setProperty(paramName, QString::number(value));
 }
 
@@ -544,6 +558,7 @@ void RGBMatrixEditor::setGrabberSourceIndex(int newValue)
         }
     }
 }
+
 int RGBMatrixEditor::imageFlipping() const
 {
     if (m_matrix != nullptr && m_matrix->algorithm() != nullptr)
@@ -717,8 +732,8 @@ void RGBMatrixEditor::slotPreviewTimeout()
     {
         QMutexLocker locker(&m_previewMutex);
 
-        m_previewStepHandler->checkNextStep(m_matrix->runOrder(), m_matrix->startColor(),
-                                            m_matrix->endColor(), m_matrix->stepsCount());
+        m_previewStepHandler->checkNextStep(m_matrix->runOrder(), m_matrix->getColor(0),
+                                            m_matrix->getColor(1), m_matrix->stepsCount());
 
         m_matrix->previewMap(m_previewStepHandler->currentStepIndex(), m_previewStepHandler);
 
@@ -748,7 +763,7 @@ void RGBMatrixEditor::slotPreviewTimeout()
             return;
 
         QMapIterator<QLCPoint, GroupHead> it(m_group->headsMap());
-        while(it.hasNext())
+        while (it.hasNext())
         {
             it.next();
 
@@ -782,9 +797,9 @@ void RGBMatrixEditor::initPreviewData()
     if (m_matrix == nullptr)
         return;
 
-    m_previewStepHandler->initializeDirection(m_matrix->direction(), m_matrix->startColor(),
-                                              m_matrix->endColor(), m_matrix->stepsCount());
-    m_previewStepHandler->calculateColorDelta(m_matrix->startColor(), m_matrix->endColor());
+    m_previewStepHandler->initializeDirection(m_matrix->direction(), m_matrix->getColor(0),
+                                              m_matrix->getColor(1), m_matrix->stepsCount(), m_matrix->algorithm());
+    m_previewStepHandler->calculateColorDelta(m_matrix->getColor(0), m_matrix->getColor(1), m_matrix->algorithm());
 
     m_previewTimer->start(MasterTimer::tick());
 }

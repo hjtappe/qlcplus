@@ -56,6 +56,7 @@
 #include "vclabel.h"
 #include "vcxypad.h"
 #include "vcclock.h"
+#include "functionwizard.h"
 #include "doc.h"
 
 #define SETTINGS_VC_SIZE "virtualconsole/size"
@@ -98,6 +99,7 @@ VirtualConsole::VirtualConsole(QWidget* parent, Doc* doc)
     , m_addAnimationAction(NULL)
 
     , m_toolsSettingsAction(NULL)
+    , m_functionWizardAction(NULL)
 
     , m_editCutAction(NULL)
     , m_editCopyAction(NULL)
@@ -365,6 +367,9 @@ void VirtualConsole::initActions()
     // and crashing the app after VC window is closed.
     m_toolsSettingsAction->setMenuRole(QAction::NoRole);
 
+    m_functionWizardAction = new QAction(QIcon(":/wizard.png"), tr("VC Fixture Widget Wizard"), this);
+    connect(m_functionWizardAction, SIGNAL(triggered(bool)), this, SLOT(slotWizard()));
+
     /* Edit menu actions */
     m_editCutAction = new QAction(QIcon(":/editcut.png"), tr("Cut"), this);
     connect(m_editCutAction, SIGNAL(triggered(bool)), this, SLOT(slotEditCut()));
@@ -583,6 +588,7 @@ void VirtualConsole::initMenuBar()
     m_toolbar->addAction(m_fgColorAction);
     m_toolbar->addAction(m_fontAction);
     m_toolbar->addSeparator();
+    m_toolbar->addAction(m_functionWizardAction);
     m_toolbar->addAction(m_toolsSettingsAction);
 }
 
@@ -1023,6 +1029,14 @@ void VirtualConsole::slotToolsSettings()
     }
 }
 
+void VirtualConsole::slotWizard()
+{
+    FunctionWizard fw(this, m_doc);
+    if (fw.exec() == QDialog::Accepted){
+        m_doc->setModified();
+    }
+}
+
 /*****************************************************************************
  * Edit menu callbacks
  *****************************************************************************/
@@ -1215,7 +1229,7 @@ void VirtualConsole::slotEditRename()
     if (ok == true)
     {
         VCWidget* widget;
-        foreach(widget, m_selectedWidgets)
+        foreach (widget, m_selectedWidgets)
             widget->setCaption(text);
     }
 }
@@ -1245,7 +1259,7 @@ void VirtualConsole::slotBackgroundColor()
         else
         {
             VCWidget* widget;
-            foreach(widget, m_selectedWidgets)
+            foreach (widget, m_selectedWidgets)
                 widget->setBackgroundColor(color);
         }
     }
@@ -1275,7 +1289,7 @@ void VirtualConsole::slotBackgroundImage()
         else
         {
             VCWidget* widget;
-            foreach(widget, m_selectedWidgets)
+            foreach (widget, m_selectedWidgets)
                 widget->setBackgroundImage(path);
         }
     }
@@ -1292,7 +1306,7 @@ void VirtualConsole::slotBackgroundNone()
     else
     {
         VCWidget* widget;
-        foreach(widget, m_selectedWidgets)
+        foreach (widget, m_selectedWidgets)
             widget->resetBackgroundColor();
     }
 }
@@ -1313,7 +1327,7 @@ void VirtualConsole::slotForegroundColor()
     if (color.isValid() == true)
     {
         VCWidget* widget;
-        foreach(widget, m_selectedWidgets)
+        foreach (widget, m_selectedWidgets)
             widget->setForegroundColor(color);
     }
 }
@@ -1326,7 +1340,7 @@ void VirtualConsole::slotForegroundNone()
         return;
 
     VCWidget* widget;
-    foreach(widget, m_selectedWidgets)
+    foreach (widget, m_selectedWidgets)
         widget->resetForegroundColor();
 }
 
@@ -1357,7 +1371,7 @@ void VirtualConsole::slotFont()
         else
         {
             VCWidget* widget;
-            foreach(widget, m_selectedWidgets)
+            foreach (widget, m_selectedWidgets)
                 widget->setFont(font);
         }
     }
@@ -1374,7 +1388,7 @@ void VirtualConsole::slotResetFont()
     else
     {
         VCWidget* widget;
-        foreach(widget, m_selectedWidgets)
+        foreach (widget, m_selectedWidgets)
             widget->resetFont();
     }
 }
@@ -1391,7 +1405,7 @@ void VirtualConsole::slotStackingRaise()
         return;
 
     VCWidget* widget;
-    foreach(widget, m_selectedWidgets)
+    foreach (widget, m_selectedWidgets)
         widget->raise();
 
     m_doc->setModified();
@@ -1405,7 +1419,7 @@ void VirtualConsole::slotStackingLower()
         return;
 
     VCWidget* widget;
-    foreach(widget, m_selectedWidgets)
+    foreach (widget, m_selectedWidgets)
         widget->lower();
 
     m_doc->setModified();
@@ -1423,7 +1437,7 @@ void VirtualConsole::slotFrameSunken()
         return;
 
     VCWidget* widget;
-    foreach(widget, m_selectedWidgets)
+    foreach (widget, m_selectedWidgets)
         widget->setFrameStyle(KVCFrameStyleSunken);
 }
 
@@ -1435,7 +1449,7 @@ void VirtualConsole::slotFrameRaised()
         return;
 
     VCWidget* widget;
-    foreach(widget, m_selectedWidgets)
+    foreach (widget, m_selectedWidgets)
         widget->setFrameStyle(KVCFrameStyleRaised);
 }
 
@@ -1447,7 +1461,7 @@ void VirtualConsole::slotFrameNone()
         return;
 
     VCWidget* widget;
-    foreach(widget, m_selectedWidgets)
+    foreach (widget, m_selectedWidgets)
         widget->setFrameStyle(KVCFrameStyleNone);
 }
 
@@ -1597,7 +1611,7 @@ void VirtualConsole::initContents()
 
 void VirtualConsole::keyPressEvent(QKeyEvent* event)
 {
-    if (event->isAutoRepeat() == true)
+    if (event->isAutoRepeat() == true || event->key() == 0)
     {
         event->ignore();
         return;
@@ -1611,7 +1625,7 @@ void VirtualConsole::keyPressEvent(QKeyEvent* event)
 
 void VirtualConsole::keyReleaseEvent(QKeyEvent* event)
 {
-    if (event->isAutoRepeat() == true)
+    if (event->isAutoRepeat() == true || event->key() == 0)
     {
         event->ignore();
         return;
@@ -1670,6 +1684,7 @@ void VirtualConsole::enableEdit()
     m_fontActionGroup->setEnabled(true);
     m_frameActionGroup->setEnabled(true);
     m_stackingActionGroup->setEnabled(true);
+    m_functionWizardAction->setEnabled(true);
 
     // Set action shortcuts for design mode
     m_addButtonAction->setShortcut(QKeySequence("CTRL+SHIFT+B"));
@@ -1722,6 +1737,7 @@ void VirtualConsole::disableEdit()
     m_fontActionGroup->setEnabled(false);
     m_frameActionGroup->setEnabled(false);
     m_stackingActionGroup->setEnabled(false);
+    m_functionWizardAction->setEnabled(false);
 
     // Disable action shortcuts in operate mode
     m_addButtonAction->setShortcut(QKeySequence());

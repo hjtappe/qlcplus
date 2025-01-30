@@ -30,7 +30,6 @@
 #include <QDial>
 #include <qmath.h>
 
-#include "mastertimer.h"
 #include "speeddial.h"
 #include "qlcmacros.h"
 #include "function.h"
@@ -55,7 +54,6 @@ const QString tapDefaultSS = "QPushButton { background-color: #DDDDDD; border: 2
 const QString tapTickSS = "QPushButton { background-color: #DDDDDD; border: 3px solid #2B2595; border-radius: 5px; }"
                           "QPushButton:pressed { background-color: #AAAAAA; }"
                           "QPushButton:disabled { border: 2px solid #BBBBBB; }";
-
 
 /****************************************************************************
  * FocusSpinBox
@@ -566,7 +564,7 @@ void SpeedDial::slotTapClicked()
     m_tapHistory.append(m_value);
     // This algorithm stabilizes around a tempo very quickly,
     // so keeping more than a few taps in the history merely complicates tempo changes.
-    while(m_tapHistory.count() > 16)
+    while (m_tapHistory.count() > 16)
         m_tapHistory.removeFirst();
 
     // Find the median time between taps, assume that the tempo is +-40% of this

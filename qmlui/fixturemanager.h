@@ -54,6 +54,7 @@ class FixtureManager : public QObject
     Q_PROPERTY(QVariantList colorWheelChannels READ colorWheelChannels NOTIFY colorWheelChannelsChanged)
     Q_PROPERTY(QVariantList shutterChannels READ shutterChannels NOTIFY shutterChannelsChanged)
     Q_PROPERTY(int colorsMask READ colorsMask NOTIFY colorsMaskChanged)
+    Q_PROPERTY(quint32 capabilityMask READ capabilityMask NOTIFY capabilityMaskChanged)
 
     Q_PROPERTY(QStringList colorFiltersFileList READ colorFiltersFileList NOTIFY colorFiltersFileListChanged)
     Q_PROPERTY(int colorFilterFileIndex READ colorFilterFileIndex WRITE setColorFilterFileIndex NOTIFY colorFilterFileIndexChanged)
@@ -171,7 +172,7 @@ public:
     Q_INVOKABLE bool deleteFixtureInGroup(quint32 groupID, quint32 itemID, QString path);
 
     /** Rename the Fixture with the provided $itemID to $newName */
-    Q_INVOKABLE void renameFixture(quint32 itemID, QString newName);
+    Q_INVOKABLE bool renameFixture(quint32 itemID, QString newName);
 
     /** Returns the number of fixtures currently loaded in the project */
     int fixturesCount();
@@ -184,6 +185,8 @@ public:
     void setPropertyEditEnabled(bool enable);
 
     Q_INVOKABLE void setItemRoleData(int itemID, int index, QString role, QVariant value);
+
+    void setItemRoleData(int itemID, QVariant value, int role);
 
     static void addFixtureNode(Doc *doc, TreeModel *treeModel, Fixture *fixture, QString basePath, quint32 nodeSubID,
                                int &matchMask, QString searchFilter = QString(), int showFlags = ShowGroups | ShowLinked | ShowHeads,
@@ -273,7 +276,7 @@ public:
 
     Q_INVOKABLE void updateFixtureGroup(quint32 groupID, quint32 itemID, int headIdx);
 
-    Q_INVOKABLE void renameFixtureGroup(quint32 groupID, QString newName);
+    Q_INVOKABLE bool renameFixtureGroup(quint32 groupID, QString newName);
 
     /** Delete some existing Fixture Groups with IDs provided by $IDList */
     Q_INVOKABLE bool deleteFixtureGroups(QVariantList IDList);
@@ -393,9 +396,6 @@ public:
 
     /** Wrapper methods to emit a signal to listeners interested in changes of
      *  channel values per capability */
-    Q_INVOKABLE void setIntensityValue(quint8 value);
-    Q_INVOKABLE void setColorValue(quint8 red, quint8 green, quint8 blue,
-                                   quint8 white, quint8 amber, quint8 uv);
     Q_INVOKABLE void setPresetValue(quint32 fixtureID, int chIndex, quint8 value);
 
     /**
@@ -438,16 +438,15 @@ public:
     /** Returns a preset channel usable by the QML PresetTool */
     Q_INVOKABLE QVariantList presetChannel(quint32 fixtureID, int chIndex);
 
+    /** Return the current capability type mask */
+    quint32 capabilityMask() const;
+
     /** Returns the currently available colors as a bitmask */
     int colorsMask() const;
 
 signals:
     /** Notify the listeners that $value of $channelIndex of $fixtureID has changed */
     void channelValueChanged(quint32 fixtureID, quint32 channelIndex, quint8 value);
-
-    /** Notify the listeners that channels of the specified $type should
-     *  be set to the provided $value */
-    void channelTypeValueChanged(int type, quint8 value);
 
     /** Notify the listeners that a color has been picked in the ColorTool.
      *  It emits all the possible components: RGB, White, Amber and UV */
@@ -474,6 +473,9 @@ signals:
     /** Notify the listeners that the available colors changed */
     void colorsMaskChanged(int colorsMask);
 
+    /** Notify the listeners that the available capabilities changed */
+    void capabilityMaskChanged();
+
 private:
     /** Generic method that returns the names of the cached channels for
      *  the required $group */
@@ -493,12 +495,18 @@ private:
     int m_maxPanDegrees;
     int m_maxTiltDegrees;
 
+    /** Variables to hold the beam properties discovered
+     *  when enabling the beam capability for the selected Fixtures */
     double m_minBeamDegrees;
     double m_maxBeamDegrees;
     bool m_invertedZoom;
 
     /** Bitmask holding the colors supported by the currently selected fixtures */
     int m_colorsMask;
+
+    /** Bitmask holding the capability supported by the currently selected fixtures */
+    quint32 m_capabilityMask;
+
     /** A map of the currently available colors and their counters */
     QMap<int, int> m_colorCounters;
 

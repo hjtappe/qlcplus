@@ -33,8 +33,10 @@
 #include <QPrinter>
 #include <QPainter>
 #include <QScreen>
+#include <unistd.h>
 
 #include "app.h"
+#include "uimanager.h"
 #include "simpledesk.h"
 #include "showmanager.h"
 #include "fixtureeditor.h"
@@ -75,6 +77,8 @@ App::App()
     , m_showManager(nullptr)
     , m_simpleDesk(nullptr)
     , m_videoProvider(nullptr)
+    , m_networkManager(nullptr)
+    , m_uiManager(nullptr)
     , m_doc(nullptr)
     , m_docLoaded(false)
     , m_printItem(nullptr)
@@ -133,6 +137,8 @@ void App::startup()
 
     initDoc();
 
+    m_uiManager = new UiManager(this, m_doc);
+    rootContext()->setContextProperty("uiManager", m_uiManager);
     m_ioManager = new InputOutputManager(this, m_doc);
     m_fixtureBrowser = new FixtureBrowser(this, m_doc);
     m_fixtureManager = new FixtureManager(this, m_doc);
@@ -168,6 +174,8 @@ void App::startup()
 
     // Start up in non-modified state
     m_doc->resetModified();
+
+    m_uiManager->initialize();
 
     // and here we go !
     setSource(QUrl("qrc:/MainView.qml"));
@@ -323,7 +331,7 @@ void App::slotScreenChanged(QScreen *screen)
     m_pixelDensity = qMax(screen->physicalDotsPerInch() *  0.039370, sSize / 220.0);
     qDebug() << "Screen changed to" << screen->name() << ", pixel density:" << m_pixelDensity
              << ", physical size:" << screen->physicalSize();
-    rootContext()->setContextProperty("screenPixelDensity", m_pixelDensity);    
+    rootContext()->setContextProperty("screenPixelDensity", m_pixelDensity);
 }
 
 void App::slotClosing()
@@ -480,7 +488,7 @@ void App::slotItemReadyForPrinting()
 {
     QPrinter printer;
     QPrintDialog *dlg = new QPrintDialog(&printer);
-    if(dlg->exec() == QDialog::Accepted)
+    if (dlg->exec() == QDialog::Accepted)
     {
         QRectF pageRect = printer.pageLayout().paintRect();
         QSize imgSize = m_printerImage->image().size();
@@ -503,7 +511,7 @@ void App::slotItemReadyForPrinting()
         }
 
         // handle multi-page printing
-        while(totalHeight > 0)
+        while (totalHeight > 0)
         {
             painter.drawImage(QPoint(0, 0), img, QRectF(0, yOffset, actualWidth, pageRect.height()));
             yOffset += pageRect.height();
@@ -594,6 +602,8 @@ bool App::newWorkspace()
 
 bool App::loadWorkspace(const QString &fileName)
 {
+    m_contextManager->resetContexts();
+
     /* Clear existing document data */
     clearDocument();
     m_docLoaded = false;
@@ -610,9 +620,9 @@ bool App::loadWorkspace(const QString &fileName)
         m_docLoaded = true;
         updateRecentFilesList(localFilename);
         emit docLoadedChanged();
-        m_contextManager->resetContexts();
         m_doc->resetModified();
         m_videoProvider = new VideoProvider(this, m_doc);
+        m_contextManager->resetContexts();
 
         // autostart Function if set
         if (m_doc->startupFunction() != Function::invalidId())

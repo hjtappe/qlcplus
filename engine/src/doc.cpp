@@ -32,7 +32,6 @@
 
 #include "qlcfixturemode.h"
 #include "qlcfixturedef.h"
-#include "qlcfile.h"
 
 #include "monitorproperties.h"
 #include "audioplugincache.h"
@@ -45,9 +44,7 @@
 #include "sequence.h"
 #include "fixture.h"
 #include "chaser.h"
-#include "scene.h"
 #include "show.h"
-#include "efx.h"
 #include "doc.h"
 #include "bus.h"
 
@@ -404,7 +401,7 @@ quint32 Doc::createFixtureId()
     return m_latestFixtureId;
 }
 
-bool Doc::addFixture(Fixture* fixture, quint32 id)
+bool Doc::addFixture(Fixture* fixture, quint32 id, bool crossUniverse)
 {
     Q_ASSERT(fixture != NULL);
 
@@ -447,6 +444,9 @@ bool Doc::addFixture(Fixture* fixture, quint32 id)
         m_addresses[i] = id;
     }
 
+    if (crossUniverse)
+        uni = floor((fixture->universeAddress() + fixture->channels()) / 512);
+
     if (uni >= inputOutputMap()->universesCount())
     {
         for (i = inputOutputMap()->universesCount(); i <= uni; i++)
@@ -464,21 +464,28 @@ bool Doc::addFixture(Fixture* fixture, quint32 id)
     for (i = 0; i < fixture->channels(); i++)
     {
         const QLCChannel *channel(fixture->channel(i));
+        quint32 addr = fxAddress + i;
+
+        if (crossUniverse)
+        {
+            uni = floor((fixture->universeAddress() + i) / 512);
+            addr = (fixture->universeAddress() + i) - (uni * 512);
+        }
 
         // Inform Universe of any HTP/LTP forcing
         if (forcedHTP.contains(int(i)))
-            universes.at(uni)->setChannelCapability(fxAddress + i, channel->group(), Universe::HTP);
+            universes.at(uni)->setChannelCapability(addr, channel->group(), Universe::HTP);
         else if (forcedLTP.contains(int(i)))
-            universes.at(uni)->setChannelCapability(fxAddress + i, channel->group(), Universe::LTP);
+            universes.at(uni)->setChannelCapability(addr, channel->group(), Universe::LTP);
         else
-            universes.at(uni)->setChannelCapability(fxAddress + i, channel->group());
+            universes.at(uni)->setChannelCapability(addr, channel->group());
 
         // Apply the default value BEFORE modifiers
-        universes.at(uni)->setChannelDefaultValue(fxAddress + i, channel->defaultValue());
+        universes.at(uni)->setChannelDefaultValue(addr, channel->defaultValue());
 
         // Apply a channel modifier, if defined
         ChannelModifier *mod = fixture->channelModifier(i);
-        universes.at(uni)->setChannelModifier(fxAddress + i, mod);
+        universes.at(uni)->setChannelModifier(addr, mod);
     }
     inputOutputMap()->releaseUniverses(true);
 
@@ -538,7 +545,7 @@ bool Doc::replaceFixtures(QList<Fixture*> newFixturesList)
     m_latestFixtureId = 0;
     m_addresses.clear();
 
-    foreach(Fixture *fixture, newFixturesList)
+    foreach (Fixture *fixture, newFixturesList)
     {
         quint32 id = fixture->id();
         // create a copy of the original cause remapping will
@@ -659,6 +666,11 @@ QList<Fixture*> const& Doc::fixtures() const
         const_cast<bool&>(m_fixturesListCacheUpToDate) = true;
     }
     return m_fixturesListCache;
+}
+
+int Doc::fixturesCount() const
+{
+    return m_fixtures.count();
 }
 
 Fixture* Doc::fixture(quint32 id) const
@@ -1049,7 +1061,7 @@ QList <Function*> Doc::functions() const
 QList<Function *> Doc::functionsByType(Function::Type type) const
 {
     QList <Function*> list;
-    foreach(Function *f, m_functions)
+    foreach (Function *f, m_functions)
     {
         if (f != NULL && f->type() == type)
             list.append(f);
@@ -1059,7 +1071,7 @@ QList<Function *> Doc::functionsByType(Function::Type type) const
 
 Function *Doc::functionByName(QString name)
 {
-    foreach(Function *f, m_functions)
+    foreach (Function *f, m_functions)
     {
         if (f != NULL && f->name() == name)
             return f;
@@ -1190,7 +1202,7 @@ QList<quint32> Doc::getUsage(quint32 fid)
                 Show *s = qobject_cast<Show *>(f);
                 foreach (Track *t, s->tracks())
                 {
-                    foreach(ShowFunction *sf, t->showFunctions())
+                    foreach (ShowFunction *sf, t->showFunctions())
                     {
                         if (sf->functionID() == fid)
                         {
