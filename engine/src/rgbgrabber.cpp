@@ -2,8 +2,6 @@
   Q Light Controller Plus
   rgbgrabber.cpp
 
-  Copyright (c) Heikki Junnila
-  Copyright (c) Jano Svitok
   Copyright (c) Massimo Callegari
   Copyright (c) Hans-Jürgen Tappe
 
@@ -35,6 +33,11 @@
 #include <QScreen>
 #include <QDebug>
 #include <QtMultimedia>
+#include <QMediaService>
+#include <QObject>
+
+// FIXME: Remove
+#include <QTextStream>
 
 #include "rgbgrabber.h"
 #include "qlcmacros.h"
@@ -44,41 +47,51 @@
 #define KXMLQLCRGBGrabberScaling      QString("Scaling")
 #define KXMLQLCRGBGrabberTurning      QString("Turning")
 #define KXMLQLCRGBGrabberFlipping     QString("Flipping")
+#define KXMLQLCRGBGrabberOffset       QString("Offset")
 #define KXMLQLCRGBGrabberOffsetX      QString("X")
 #define KXMLQLCRGBGrabberOffsetY      QString("Y")
 
-#define CAMERA 1
+#define ENABLE_CAMERA 1
+Q_DECLARE_METATYPE(QCameraInfo)
 
 RGBGrabber::RGBGrabber(Doc * doc)
     : RGBAlgorithm(doc)
     , m_source("")
+    , m_camera(0)
+    , m_imageCapture(0)
+    , m_rawImage(0)
+    , m_imageTurning(noturn)
+    , m_imageFlipping(original)
     , m_imageScaling(scaledXY)
     , m_xOffset(0)
     , m_yOffset(0)
-    , m_imageTurning(noturn)
-    , m_imageFlipping(original)
 {
 }
 
-RGBGrabber::RGBGrabber(const RGBGrabber& i)
-    : RGBAlgorithm(i.doc())
+RGBGrabber::RGBGrabber(const RGBGrabber& i, QObject *parent)
+    : QObject(parent)
+    , RGBAlgorithm(i.doc())
     , m_source(i.source())
-    , m_imageScaling(i.imageScaling())
-    , m_xOffset(i.m_xOffset)
-    , m_yOffset(i.m_yOffset)
+    , m_camera(0)
+    , m_imageCapture(i.m_imageCapture.data())
+    , m_rawImage(0)
     , m_imageTurning(i.imageTurning())
     , m_imageFlipping(i.imageFlipping())
+    , m_imageScaling(i.imageScaling())
+    , m_xOffset(i.xOffset())
+    , m_yOffset(i.yOffset())
 {
 }
 
 RGBGrabber::~RGBGrabber()
 {
+    postRun();
 }
 
 RGBAlgorithm* RGBGrabber::clone() const
 {
-    RGBGrabber* image = new RGBGrabber(*this);
-    return static_cast<RGBAlgorithm*> (image);
+    RGBGrabber* grabber = new RGBGrabber(*this);
+    return static_cast<RGBAlgorithm*> (grabber);
 }
 
 /****************************************************************************
@@ -97,23 +110,35 @@ QString RGBGrabber::source() const
 
 QStringList RGBGrabber::sourceList()
 {
-    const QList<QScreen*> screens = QGuiApplication::screens();
-    const QList<QCameraInfo> cameras = QCameraInfo::availableCameras();
     QStringList list;
 
+    const QList<QScreen*> screens = QGuiApplication::screens();
     for (const QScreen* screen: screens)
     {
         QString entry = screen->name();
         entry.prepend("screen:");
         list.append(entry);
     }
-#if CAMERA // camera
-    for (const QCameraInfo &cameraInfo : cameras) {
-        QString entry = cameraInfo.deviceName();
-        entry.prepend("camera:");
-        list.append(entry);
+
+#if ENABLE_CAMERA // camera
+    // Get the list of available cameras
+    const QList<QCameraInfo> cameras = QCameraInfo::availableCameras();
+    for (const QCameraInfo &cameraInfo : cameras)
+    {
+        QCamera cam(cameraInfo);
+        if (cam.isCaptureModeSupported(QCamera::CaptureStillImage))
+        {
+            QString entry = cameraInfo.description(); // or deviceName()
+            entry.prepend("input:");
+            list.append(entry);
+        }
+        else
+        {
+            qDebug() << cameraInfo.description() << ": no image capture supported";
+        }
     }
 #endif // camera
+
     list.sort(Qt::CaseInsensitive);
 
     return list;
@@ -326,15 +351,32 @@ QVector<uint> RGBGrabber::rgbMapGetColors()
     return QVector<uint>();
 }
 
+//void RGBGrabber::slotImageCaptured(int id, const QImage &preview)
+//{
+//    Q_UNUSED(id);
+//    // FIXME: do we need to pull a mutex here?
+//    // Update the image
+//    m_rawImage = preview;
+//}
+
 void RGBGrabber::rgbMap(const QSize& size, uint rgb, int step, RGBMap &map)
 {
     Q_UNUSED(rgb);
     Q_UNUSED(step);
     QMutexLocker locker(&m_mutex);
-    QImage image;
 
     int xOffs = xOffset();
     int yOffs = yOffset();
+
+    // Prepare map
+    map.resize(size.height());
+    for (int y = 0; y < size.height(); y++)
+    {
+        map[y].resize(size.width());
+    }
+
+    // FIXME: Remove
+    QTextStream cout(stdout, QIODevice::WriteOnly);
 
     if (m_source.startsWith("screen:")) {
         // Identify the configured screen
@@ -361,50 +403,190 @@ void RGBGrabber::rgbMap(const QSize& size, uint rgb, int step, RGBMap &map)
         if (screen == NULL)
             return;
         else
-            image = screen->grabWindow(0).toImage();
+        {
+            QImage image = screen->grabWindow(0).toImage();
+            m_rawImage = image;
+        }
     }
-#if CAMERA // camera
-    else if (m_source.startsWith("camera:")) {
-        const QList<QCameraInfo> cameras = QCameraInfo::availableCameras();
-        QCamera* camera = NULL;
+#if ENABLE_CAMERA // camera
+    else if (m_source.startsWith("input:"))
+    {
+        QScopedPointer<QCameraInfo> thisCameraInfo;
+//        cout << "NEW ROUND =========================" << Qt::endl;
 
         // Get the camera by name
-        for (const QCameraInfo &cameraInfo : cameras) {
-            QString search = cameraInfo.deviceName();
-            search.prepend("camera:");
-            if (search == m_source) {
-                camera = new QCamera(cameraInfo);
-                break;
+        if (! m_camera.isNull())
+        {
+            thisCameraInfo.reset(new QCameraInfo(*(m_camera.data())));
+        }
+        if (! m_camera.isNull() && ! m_camera.data()->isAvailable())
+        {
+            qDebug() << "Camera not initialized or available";
+        }
+
+        // Set m_camera
+        if (m_camera.isNull() ||
+                (!thisCameraInfo->isNull() &&
+                        thisCameraInfo.data()->description().prepend("input:") != m_source.data()))
+        {
+            const QList<QCameraInfo> cameras = QCameraInfo::availableCameras();
+
+            for (const QCameraInfo &cameraInfo : cameras)
+            {
+                QString search = cameraInfo.description(); // or deviceName()
+                search.prepend("input:");
+                if (search == m_source)
+                {
+                    m_camera.reset(new QCamera(cameraInfo));
+                    thisCameraInfo.reset(new QCameraInfo(*(m_camera.data())));
+                    m_camera->setCaptureMode(QCamera::CaptureStillImage);
+                    m_camera->start();
+                    qDebug() << "Camera: '" << thisCameraInfo.data()->description() << "' at '" << thisCameraInfo->deviceName() << "'";
+                    qDebug() << "Camera status: " << m_camera->status();
+                    qDebug() << "Camera state:  " << m_camera->state();
+                   break;
+                }
             }
         }
-        // Get the next image
-        if (camera != NULL)
+
+        // set thisCameraInfo
+        if (m_camera.isNull())
         {
-            QCameraImageCapture* capture = new QCameraImageCapture(camera);
-            capture->setCaptureDestination(QCameraImageCapture::CaptureToBuffer);
-            camera->setCaptureMode(QCamera::CaptureStillImage);
-            camera->start();
-            camera->searchAndLock();
-            capture->capture();
-            camera->unlock();
-            // Listen for QCameraImageCapture::imageAvailable()
-            //connect(capture, &QCameraImageCapture::imageCaptured, [&](int id, const QImage &preview){
-                // Get the preview into the image
-                QVideoFrame videoFrame;
-            //});
-            image = QImage(videoFrame.bits(),
-                videoFrame.width(),
-                videoFrame.height(),
-                videoFrame.bytesPerLine(),
-                QVideoFrame::imageFormatFromPixelFormat(videoFrame.pixelFormat()));
+            qWarning() << "FAILED to initialize camera";
+            cout << "FAILED to initialize camera" << Qt::endl;
+            return;
         }
+        else if (m_camera.data()->isAvailable() &&
+                m_camera.data()->status() == QCamera::ActiveStatus)
+        {
+            // FIXME: Why again? Is it not set before?
+//            thisCameraInfo.reset(new QCameraInfo(*(m_camera.data())));
+            cout << "Camera available: " << thisCameraInfo.data()->deviceName() << Qt::endl;
+        }
+        else
+        {
+            if (!m_camera.data()->isAvailable())
+                cout << "Camera not available." << Qt::endl;
+            if (m_camera.data()->status() != QCamera::ActiveStatus)
+                cout << "Camera not in active status." << Qt::endl;
+            // Try to (re-)start the camera
+            cout << "Restarting camera from status " << m_camera.data()->status() << Qt::endl;
+            m_camera.data()->start();
+        }
+
+        // Get the next image
+        if (! m_camera.data()->isAvailable())
+        {
+            qWarning() << "UNAVAILABLE: Camera is not available";
+            cout << "UNAVAILABLE: Camera is not available" << Qt::endl;
+        }
+        else
+        {
+            // FIXME: Why again? Is it not set before?
+            thisCameraInfo.reset(new QCameraInfo(*(m_camera.data())));
+
+            // Configure the camera
+            m_imageCapture.reset(new QCameraImageCapture(m_camera.data()));
+
+            connect(m_imageCapture.data(),
+                    &QCameraImageCapture::imageCaptured,
+                    this,
+                    [&](int id, const QImage &preview)
+                    {
+                        Q_UNUSED(id);
+                        // FIXME: Remove cout
+                        QTextStream cout(stdout, QIODevice::WriteOnly);
+                        cout << "OK: Capture available, copying image" << Qt::endl;
+                        // Get the image
+                        m_rawImage = QImage(preview);
+                    });
+// TODO: implement this as a dedicated slot function
+//            connect(m_imageCapture.data(),
+//                    &QCameraImageCapture::imageCaptured,
+//                    this,
+//                    &slotImageCaptured(int id, const QImage &preview));
+// TODO: ... and then use the SIGNAL & SLOT semantics
+//            connect(m_imageCapture.data(),
+//                    SIGNAL(&QCameraImageCapture::imageCaptured),
+//                    this,
+//                    SLOT(slotImageCaptured(int, const QImage &)));
+            connect(m_imageCapture.data(),
+                    QOverload<int, QCameraImageCapture::Error,
+                    const QString &>::of(&QCameraImageCapture::error),
+                    this,
+                    [&](int id,
+                            const QCameraImageCapture::Error error,
+                            const QString &errorString)
+                        {
+                            Q_UNUSED(id);
+                            Q_UNUSED(error);
+                            // FIXME: Remove cout
+                            QTextStream cout(stdout, QIODevice::WriteOnly);
+                            qWarning() << "ERR: Capture: " << errorString;
+                            cout << "ERR: Capture: " << errorString << Qt::endl;
+                        });
+
+            // Get the image
+            if (m_imageCapture.data()->isCaptureDestinationSupported(QCameraImageCapture::CaptureToBuffer))
+            {
+                m_imageCapture.data()->setCaptureDestination(QCameraImageCapture::CaptureToBuffer);
+            }
+            else
+            {
+                qWarning() << "SINK ERROR: QCameraImageCapture::CaptureToBuffer not supported.";
+                cout << "SINK ERROR: QCameraImageCapture::CaptureToBuffer not supported." << Qt::endl;
+                return;
+            }
+            m_imageCapture.data()->capture();
+        }
+
+        // Wait a brief time for the capture to complete
+        m_timer.setSingleShot(true);
+        connect(m_imageCapture.data(),
+                &QCameraImageCapture::imageCaptured,
+                &m_loop,
+                &QEventLoop::quit);
+        connect(&m_timer,
+                &QTimer::timeout,
+                &m_loop,
+                &QEventLoop::quit);
+// TODO: Use SIGNAL and SLOT semantics
+//        connect(m_imageCapture.data(),
+//                SIGNAL(QCameraImageCapture::imageCaptured),
+//                &m_loop,
+//                SLOT(QEventLoop::quit));
+//        connect(&m_timer,
+//                SIGNAL(QTimer::timeout),
+//                &m_loop,
+//                SLOT(QEventLoop::quit));
+        m_timer.start(40);
+// TODO: Stay a few ms here to wait for the image to become available.
+//        m_loop.exec();
+//        if(m_timer.isActive())
+//            cout << "OK: Capture received with " << m_timer.remainingTime() << "ms left" << Qt::endl;
+//            qDebug() << "OK: Capture received with " << m_timer.remainingTime() << "ms left";
+//        else
+//            cout << "Capture takes longer than " << m_timer.interval() << Qt::endl;
+//            qDebug() << "Capture takes longer than " << m_timer.interval();
     }
-#endif // camera
+#endif // ENABLE_CAMERA
     else
+    {
+        qDebug() << "Invalid source selected";
+        cout << "Invalid source selected" << Qt::endl;
         return;
+    }
+
     // Check if input image size is valid (width & height > 0)
-    if (image.width() == 0 || image.height() == 0)
+    if (m_rawImage.isNull() || m_rawImage.width() == 0 || m_rawImage.height() == 0)
+    {
+        qDebug() << "No image. Terminating.";
+        cout << "No image. Terminating." << Qt::endl;
         return;
+    }
+
+    // Copy the captured image for transformation
+    QImage matrixImage = m_rawImage;
 
     // Turn the image
     switch (imageTurning())
@@ -413,13 +595,13 @@ void RGBGrabber::rgbMap(const QSize& size, uint rgb, int step, RGBMap &map)
         case noturn:
             break;
         case turn90:
-            image = image.transformed(QMatrix().rotate(90.0));
+            matrixImage = matrixImage.transformed(QTransform().rotate(90.0), Qt::FastTransformation);
             break;
         case turn180:
-            image = image.transformed(QMatrix().rotate(180.0));
+            matrixImage = matrixImage.transformed(QTransform().rotate(180.0), Qt::FastTransformation);
             break;
         case turn270:
-            image = image.transformed(QMatrix().rotate(270.0));
+            matrixImage = matrixImage.transformed(QTransform().rotate(270.0), Qt::FastTransformation);
             break;
     }
 
@@ -430,10 +612,10 @@ void RGBGrabber::rgbMap(const QSize& size, uint rgb, int step, RGBMap &map)
         case original:
             break;
         case vertically:
-            image = image.mirrored(false, true);
+            matrixImage = matrixImage.mirrored(false, true);
             break;
         case horizontally:
-            image = image.mirrored(true, false);
+            matrixImage = matrixImage.mirrored(true, false);
             break;
     }
 
@@ -442,46 +624,74 @@ void RGBGrabber::rgbMap(const QSize& size, uint rgb, int step, RGBMap &map)
             (imageScaling() == minWidthHeight && size.width() <= size.height()) ||
             (imageScaling() == maxWidthHeight && size.width() > size.height()))
     {
-        int newHeight = ceil(image.height() * size.width(), image.width());
-        // Center the image
-        int scalingOffset = newHeight - size.height();
-        if (scalingOffset < 0)
-            scalingOffset *= -1;
-        yOffs += ceil(scalingOffset, 2);
-        image = image.scaled(size.width(), newHeight, Qt::KeepAspectRatioByExpanding, Qt::FastTransformation);
+        int newHeight = ceil(matrixImage.height() * size.width(), matrixImage.width());
+        // Scale the image to the target height, with a deviating newWidth
+        QImage image = matrixImage.scaled(size.width(), newHeight, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+        // Copy the image into a image in target size
+        matrixImage = image.copy(xOffs,
+                yOffs + (newHeight - size.height()) / 2,
+                size.width(),
+                size.height());
     }
     else if (imageScaling() == scaledHeight ||
             (imageScaling() == minWidthHeight && size.width() >= size.height()) ||
             (imageScaling() == maxWidthHeight && size.width() < size.height()))
     {
-        int newWidth = ceil(image.width() * size.height(), image.height());
-        // Center the image
-        int scalingOffset = newWidth - size.width();
-        if (scalingOffset < 0)
-            scalingOffset *= -1;
-        xOffs += ceil(scalingOffset, 2);
-        image = image.scaled(newWidth, size.height(), Qt::KeepAspectRatioByExpanding, Qt::FastTransformation);
+        int newWidth = ceil(matrixImage.width() * size.height(), matrixImage.height());
+        // Scale the image to the target height, with a deviating newWidth
+        QImage image = matrixImage.scaled(newWidth, size.height(), Qt::IgnoreAspectRatio, Qt::FastTransformation);
+        // Copy the image into a image in target size
+        matrixImage = image.copy(xOffs + (newWidth - size.width()) / 2,
+                yOffs,
+                size.width(),
+                size.height());
     }
     else
     {
-        image = image.scaled(size, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+        QImage image = matrixImage.scaled(size, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+        matrixImage = image.copy(xOffs,
+                        yOffs,
+                        size.width(),
+                        size.height());
     }
 
-    // Prepare map and Fill the colors
-    map.resize(size.height());
+    // Fill the matrix
     for (int y = 0; y < size.height(); y++)
     {
-        map[y].resize(size.width());
         for (int x = 0; x < size.width(); x++)
         {
-            int x1 = (x + xOffs) % image.width();
-            int y1 = (y + yOffs) % image.height();
-
-            map[y][x] = image.pixel(x1,y1);
+            map[y][x] = matrixImage.pixel(x, y);
             if (qAlpha(map[y][x]) == 0)
                 map[y][x] = 0;
         }
     }
+}
+
+void RGBGrabber::postRun()
+{
+    if (!m_camera.isNull())
+        m_camera.data()->stop();
+    if (m_loop.isRunning())
+        m_loop.quit();
+
+    // Disconnect signals and slots
+    if (!m_imageCapture.isNull())
+    {
+// FIXME: See slotImageCaptured comment
+//        disconnect(m_imageCapture.data(),
+//                SIGNAL(QCameraImageCapture::imageCaptured),
+//                this,
+//                SLOT(slotImageCaptured(int, const QImage &)));
+// FIXME: Causes SEGFAULT on cloning the algorithm
+//        disconnect(m_imageCapture.data(),
+//                SIGNAL(QCameraImageCapture::imageCaptured),
+//                &m_loop,
+//                SLOT(QEventLoop::quit));
+    }
+    disconnect(&m_timer,
+            SIGNAL(QTimer::timeout),
+            &m_loop,
+            SLOT(QEventLoop::quit));
 }
 
 QString RGBGrabber::name() const
@@ -527,7 +737,7 @@ bool RGBGrabber::loadXML(QXmlStreamReader &root)
     {
         if (root.name() == KXMLQLCRGBGrabberSource)
         {
-            setSource(doc()->denormalizeComponentPath(root.readElementText()));
+            setSource(root.readElementText());
         }
         else if (root.name() == KXMLQLCRGBGrabberTurning)
         {
@@ -539,12 +749,14 @@ bool RGBGrabber::loadXML(QXmlStreamReader &root)
         }
         else if (root.name() == KXMLQLCRGBGrabberScaling)
         {
+            setImageScaling(stringToImageScaling(root.readElementText()));
+        }
+        else if (root.name() == KXMLQLCRGBGrabberOffset)
+        {
             QString str;
             int value;
             bool ok;
             QXmlStreamAttributes attrs = root.attributes();
-
-            setImageScaling(stringToImageScaling(root.readElementText()));
 
             str = attrs.value(KXMLQLCRGBGrabberOffsetX).toString();
             ok = false;
@@ -561,7 +773,7 @@ bool RGBGrabber::loadXML(QXmlStreamReader &root)
                 setYOffset(value);
             else
                 qWarning() << Q_FUNC_INFO << "Invalid Y offset:" << str;
-            // root.skipCurrentElement();
+             root.skipCurrentElement();
         }
         else
         {
@@ -581,13 +793,15 @@ bool RGBGrabber::saveXML(QXmlStreamWriter *doc) const
     doc->writeAttribute(KXMLQLCRGBAlgorithmType, KXMLQLCRGBGrabber);
 
     // Source
-    doc->writeTextElement(KXMLQLCRGBGrabberSource, this->doc()->normalizeComponentPath(m_source));
+    doc->writeTextElement(KXMLQLCRGBGrabberSource, m_source);
 
     // Scaling
-    doc->writeStartElement(KXMLQLCRGBGrabberScaling);
+    doc->writeTextElement(KXMLQLCRGBGrabberScaling, imageScalingToString(imageScaling()));
+
+    // Scaling Offset
+    doc->writeStartElement(KXMLQLCRGBGrabberOffset);
     doc->writeAttribute(KXMLQLCRGBGrabberOffsetX, QString::number(xOffset()));
     doc->writeAttribute(KXMLQLCRGBGrabberOffsetY, QString::number(yOffset()));
-    doc->writeCDATA(imageScalingToString(imageScaling()));
     doc->writeEndElement();
 
     // Turning

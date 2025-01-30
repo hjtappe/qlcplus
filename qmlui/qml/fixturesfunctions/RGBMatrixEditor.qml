@@ -202,7 +202,7 @@ Rectangle
                             paramSection.sectionContents = textAlgoComponent
                         else if (displayText == "Image")
                             paramSection.sectionContents = imageAlgoComponent
-                        else if (displayText == "Grabber")
+                        else if (displayText == "Video Grabber")
                             paramSection.sectionContents = grabberAlgoComponent
                         else
                             paramSection.sectionContents = scriptAlgoComponent
@@ -1065,10 +1065,10 @@ Rectangle
             {
                 Layout.fillWidth: true
                 height: editorColumn.itemsHeight
-
+                textRole: ""
                 model: rgbMatrixEditor.grabberSourceList
                 currentIndex: rgbMatrixEditor.grabberSourceIndex
-                onCurrentIndexChanged: rgbMatrixEditor.grabberSource = currentIndex
+                onDisplayTextChanged: rgbMatrixEditor.grabberSourceIndex = currentIndex
             }
 
             // Row 2
@@ -1084,15 +1084,15 @@ Rectangle
 
                 ListModel
                 {
-                    id: grabberSourceModel
+                    id: grabberTurnModel
                     ListElement { mLabel: qsTr("Original"); }
                     ListElement { mLabel: qsTr("90°"); }
                     ListElement { mLabel: qsTr("180°"); }
                     ListElement { mLabel: qsTr("270°"); }
                 }
-                model: grabberSourceModel
-                currentIndex: rgbMatrixEditor.grabberTurning
-                onCurrentIndexChanged: rgbMatrixEditor.grabberTurning = currentIndex
+                model: grabberTurnModel
+                currentIndex: rgbMatrixEditor.imageTurning
+                onCurrentIndexChanged: rgbMatrixEditor.imageTurning = currentIndex
             }
 
             // Row 3
@@ -1114,8 +1114,8 @@ Rectangle
                     ListElement { mLabel: qsTr("Horizontally"); }
                 }
                 model: grabberFlippingModel
-                currentIndex: rgbMatrixEditor.grabberFlipping
-                onCurrentIndexChanged: rgbMatrixEditor.grabberFlipping = currentIndex
+                currentIndex: rgbMatrixEditor.imageFlipping
+                onCurrentIndexChanged: rgbMatrixEditor.imageFlipping = currentIndex
             }
 
             // Row 4
@@ -1131,16 +1131,16 @@ Rectangle
 
                 ListModel
                 {
-                    id: grabberSourceModel
+                    id: grabberScalingModel
                     ListElement { mLabel: qsTr("Scaled"); }
                     ListElement { mLabel: qsTr("Scaled to width"); }
                     ListElement { mLabel: qsTr("Scaled to height"); }
                     ListElement { mLabel: qsTr("Scaled to min. w,h"); }
                     ListElement { mLabel: qsTr("Scaled to max. w,h"); }
                 }
-                model: grabberSourceModel
-                currentIndex: rgbMatrixEditor.grabberScaling
-                onCurrentIndexChanged: rgbMatrixEditor.grabberScaling = currentIndex
+                model: grabberScalingModel
+                currentIndex: rgbMatrixEditor.imageScaling
+                onCurrentIndexChanged: rgbMatrixEditor.imageScaling = currentIndex
             }
 
             // Row 5

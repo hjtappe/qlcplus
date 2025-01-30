@@ -113,6 +113,8 @@ qmlui: {
 
     qtmedia.path = $$INSTALLROOT/$$LIBSDIR/qt5/plugins/mediaservice
     qtmedia.files = $$QT_PLUGINS_PATH/mediaservice/libgstaudiodecoder.so \
+                    $$QT_PLUGINS_PATH/mediaservice/libgstcamerabin.so \
+                    $$QT_PLUGINS_PATH/mediaservice/libgstmediacapture.so \
                     $$QT_PLUGINS_PATH/mediaservice/libgstmediaplayer.so
     INSTALLS += qtmedia
 

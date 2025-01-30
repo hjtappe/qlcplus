@@ -1076,13 +1076,6 @@ int Tardis::processAction(TardisAction &action, bool undo)
             algo->setFilename(value->toString());
         }
         break;
-        case RGBMatrixSetGrabber:
-        {
-            RGBMatrix *matrix = qobject_cast<RGBMatrix *>(m_doc->function(action.m_objID));
-            RGBGrabber* algo = static_cast<RGBGrabber*> (matrix->algorithm());
-            algo->setSource(value->toString());
-        }
-        break;
         case RGBMatrixSetOffset:
         {
             RGBMatrix *matrix = qobject_cast<RGBMatrix *>(m_doc->function(action.m_objID));
@@ -1133,7 +1126,8 @@ int Tardis::processAction(TardisAction &action, bool undo)
             if (matrix->algorithm()->type() == RGBAlgorithm::Grabber)
             {
                 RGBGrabber* algo = static_cast<RGBGrabber*> (matrix->algorithm());
-                algo->setSource(value->toString());
+                QStringList sourceList = algo->sourceList();
+                algo->setSource(sourceList.at(value->toInt()));
             }
         }
         break;
@@ -1143,7 +1137,7 @@ int Tardis::processAction(TardisAction &action, bool undo)
             if (matrix->algorithm()->type() == RGBAlgorithm::Grabber)
             {
                 RGBGrabber* algo = static_cast<RGBGrabber*> (matrix->algorithm());
-                algo->setImageTurning(RGBGrabber::stringToImageTurning(value->toString()));
+                algo->setImageTurning(RGBGrabber::ImageTurning(value->toInt()));
             }
         }
         break;
@@ -1153,7 +1147,7 @@ int Tardis::processAction(TardisAction &action, bool undo)
             if (matrix->algorithm()->type() == RGBAlgorithm::Grabber)
             {
                 RGBGrabber* algo = static_cast<RGBGrabber*> (matrix->algorithm());
-                algo->setImageFlipping(RGBGrabber::stringToImageFlipping(value->toString()));
+                algo->setImageFlipping(RGBGrabber::ImageFlipping(value->toInt()));
             }
         }
         break;
@@ -1163,7 +1157,7 @@ int Tardis::processAction(TardisAction &action, bool undo)
             if (matrix->algorithm()->type() == RGBAlgorithm::Grabber)
             {
                 RGBGrabber* algo = static_cast<RGBGrabber*> (matrix->algorithm());
-                algo->setImageScaling(RGBGrabber::stringToImageScaling(value->toString()));
+                algo->setImageScaling(RGBGrabber::ImageScaling(value->toInt()));
             }
         }
         break;

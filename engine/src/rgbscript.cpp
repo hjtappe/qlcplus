@@ -158,6 +158,8 @@ bool RGBScript::evaluate()
     m_rgbMapSetColors = QScriptValue();
     m_apiVersion = 0;
 
+    if (s_engine == NULL)
+        initEngine();
     m_script = s_engine->evaluate(m_contents, m_fileName);
     if (s_engine->hasUncaughtException() == true)
     {

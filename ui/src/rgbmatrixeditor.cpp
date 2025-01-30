@@ -98,6 +98,8 @@ RGBMatrixEditor::~RGBMatrixEditor()
 
     if (m_testButton->isChecked() == true)
         m_matrix->stopAndWait();
+    if (m_matrix->algorithm() != NULL)
+        m_matrix->algorithm()->postRun();
 
     delete m_previewHandler;
 }
@@ -446,9 +448,9 @@ void RGBMatrixEditor::updateExtraOptions()
     else if (m_matrix->algorithm()->type() == RGBAlgorithm::Text)
     {
         m_textGroup->show();
+        m_offsetGroup->show();
         m_imageGroup->hide();
         m_grabberGroup->hide();
-        m_offsetGroup->show();
 
         RGBText *text = static_cast<RGBText*> (m_matrix->algorithm());
         Q_ASSERT(text != NULL);
@@ -1215,6 +1217,18 @@ void RGBMatrixEditor::slotOffsetSpinChanged()
     if (m_matrix->algorithm() != NULL && m_matrix->algorithm()->type() == RGBAlgorithm::Image)
     {
         RGBImage *algo = static_cast<RGBImage*> (m_matrix->algorithm());
+        Q_ASSERT(algo != NULL);
+        {
+            QMutexLocker algorithmLocker(&m_matrix->algorithmMutex());
+            algo->setXOffset(m_xOffsetSpin->value());
+            algo->setYOffset(m_yOffsetSpin->value());
+        }
+        slotRestartTest();
+    }
+
+    if (m_matrix->algorithm() != NULL && m_matrix->algorithm()->type() == RGBAlgorithm::Grabber)
+    {
+        RGBGrabber* algo = static_cast<RGBGrabber*> (m_matrix->algorithm());
         Q_ASSERT(algo != NULL);
         {
             QMutexLocker algorithmLocker(&m_matrix->algorithmMutex());

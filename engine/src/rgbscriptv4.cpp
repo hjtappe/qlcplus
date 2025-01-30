@@ -147,6 +147,8 @@ bool RGBScript::evaluate()
         return false;
     }
 
+    if (s_engine == NULL)
+        initEngine();
     m_script = s_engine->evaluate(m_contents, m_fileName);
     if (m_script.isError())
     {

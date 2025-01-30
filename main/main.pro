@@ -26,7 +26,8 @@ win32:RC_FILE = main.rc
 win32:FORMS += ../ui/src/debugbox.ui
 macx:FORMS += ../ui/src/debugbox.ui
 
-QT += gui core widgets
+QT += gui core widgets multimedia
+QTPLUGIN += qavfcamera mediaservice
 qmlui|greaterThan(QT_MAJOR_VERSION, 5) {
   QT += qml
 } else {

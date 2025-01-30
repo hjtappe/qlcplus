@@ -73,12 +73,12 @@ QStringList RGBAlgorithm::algorithms(Doc * doc)
     RGBPlain plain(doc);
     RGBText text(doc);
     RGBImage image(doc);
-    RGBGrabber screenshot(doc);
+    RGBGrabber grabber(doc);
     RGBAudio audio(doc);
     list << plain.name();
     list << text.name();
     list << image.name();
-    list << screenshot.name();
+    list << grabber.name();
     list << audio.name();
     list << doc->rgbScriptsCache()->names();
     list.sort(Qt::CaseInsensitive);
@@ -89,15 +89,15 @@ RGBAlgorithm* RGBAlgorithm::algorithm(Doc * doc, const QString& name)
 {
     RGBText text(doc);
     RGBImage image(doc);
-    RGBGrabber screenshot(doc);
+    RGBGrabber grabber(doc);
     RGBAudio audio(doc);
     RGBPlain plain(doc);
     if (name == text.name())
         return text.clone();
     else if (name == image.name())
         return image.clone();
-    else if (name == screenshot.name())
-        return screenshot.clone();
+    else if (name == grabber.name())
+        return grabber.clone();
     else if (name == audio.name())
         return audio.clone();
     else if (name == plain.name())
@@ -129,9 +129,9 @@ RGBAlgorithm* RGBAlgorithm::loader(Doc * doc, QXmlStreamReader &root)
     }
     if (type == KXMLQLCRGBGrabber)
     {
-        RGBGrabber screenshot(doc);
-        if (screenshot.loadXML(root) == true)
-            algo = screenshot.clone();
+        RGBGrabber grabber(doc);
+        if (grabber.loadXML(root) == true)
+            algo = grabber.clone();
     }
     else if (type == KXMLQLCRGBText)
     {
